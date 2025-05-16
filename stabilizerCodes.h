@@ -11,7 +11,6 @@
 #ifndef BPDECODING_STABILIZIERCODES_H
 #define BPDECODING_STABILIZIERCODES_H
 #include "fileReader.h"
-#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
