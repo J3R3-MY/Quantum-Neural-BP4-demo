@@ -831,14 +831,15 @@ print(f'number of batches = {n_batches}')
 print(f'error patterns per batch = {batch_size}')
 print(f'learning rate = {lr}\n')
 
-cpp_executable = './sim_FER'
+cpp_executable = './NBP_jupyter'
 cpp_parameters = ['-d','128','2',str(m), '25', '1', '-i',str(ep0),'-r','0.15','0.015','0.015']
 # training stage
 loss = torch.Tensor()
-
+print("Plotting loss...")
 loss_pre_train = training_loop(decoder, optimizer, ep1, sep,num_points, ep0, n_batches, path, scheduler=scheduler)
 loss = torch.cat((loss, loss_pre_train), dim=0)
 plot_loss(loss, path) #its ok if it doesn't converge to 0
+plot_loss(loss_pre_train, path)
 subprocess.call([cpp_executable] + cpp_parameters)
 
 

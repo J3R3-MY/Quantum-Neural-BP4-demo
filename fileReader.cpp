@@ -3,6 +3,7 @@
 //
 #include "fileReader.h"
 #include <cmath>
+#include <experimental/filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -276,11 +277,11 @@ void fileReader::load_vn_weights() {
     weights_file.close();
 }
 
-std::filesystem::path fileReader::construct_weights_path(std::string_view filename) const {
+std::experimental::filesystem::path fileReader::construct_weights_path(std::string_view filename) const {
     std::string codeTypeString = code_type_string();
     std::stringstream directory_name_builder;
     directory_name_builder << codeTypeString << "_" << N << "_" << K << "_" << M;
-    std::filesystem::path path = "training_results";
+    std::experimental::filesystem::path path = "training_results";
     path /= directory_name_builder.str();
     path /= filename;
 
