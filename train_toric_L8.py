@@ -766,15 +766,15 @@ def addErrorGivenWeight(n: int, w: int, batch_size: int = 1):
 
 # give parameters for the code and decoder
 torch.autograd.set_detect_anomaly(True)
-L = 8
-n = 2*L*L
+print("Starting training...")
+# L = 4
+n = 46
 k = 2
-m = 3*n  # number of checks, can also use 46 or 44
-# m= n-k
+m=800 
 m1 = m // 2
 m2 = m // 2
 n_iterations = 25
-codeType = 'toric'
+codeType = 'GB'
 
 # give parameters for training
 # learning rate
@@ -811,7 +811,7 @@ decoder = NBP_oc(n, k, m, m1, m2, codeType, n_iterations, batch_size=batch_size,
 # plt.show()
 
 
-
+print("Beginning optimization...")
 optimizer = torch.optim.SGD([
     {'params': decoder.weights_llr, 'lr': lr},
     {'params': decoder.weights_vn,'lr': lr},
