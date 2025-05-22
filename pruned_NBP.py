@@ -35,6 +35,7 @@ class NBP_oc(nn.Module):
 
         self.xhat = torch.zeros((batch_size, self.n))
         self.zhat = torch.zeros((batch_size, self.n))
+        self.pruned_weights = []
         self.load_matrices()
 
         if not folder_weights:
@@ -507,6 +508,71 @@ class NBP_oc(nn.Module):
         f.close()
 
 
+    def prune_weights(self):
+        """
+        Finds the minimum nonzero weight in weights_cn, saves it to a list, resets all weights to one, and prunes the minimum weight.
+        """
+        # Find minimum nonzero weight in weights_cn (across all layers/iterations)
+        min_val = None
+        min_tensor_idx = None
+        min_idx_3d = None
+
+        print("++++++++++++++++++++++++++++++++++++++++++++")
+        print("First iteration of weights_cn before pruning:")
+        print(self.weights_cn[0])
+
+        for idx, w in enumerate(self.weights_cn):
+            nonzero_mask = w != 0
+            if torch.any(nonzero_mask):
+                nonzero_vals = w[nonzero_mask]
+                local_min_val = torch.min(nonzero_vals).item()
+                # Find its index in the original tensor
+                min_positions = (w == local_min_val).nonzero(as_tuple=True)
+                # To avoid multiple matches, pick the first one
+                local_min_3d = tuple(m[0].item() for m in min_positions)
+                if (min_val is None) or (local_min_val < min_val):
+                    min_val = local_min_val
+                    min_tensor_idx = idx  # This is the iteration/layer
+                    min_idx_3d = min_positions[0]  # This is a tuple (batch, check_node, column)
+
+        if min_tensor_idx is not None and min_idx_3d is not None:
+            # Save the pruned weight indices as (iteration, index in weight tensor)
+            if not hasattr(self, "pruned_weights_info"):
+                self.pruned_weights_info = []
+            self.pruned_weights_info.append((min_tensor_idx, tuple(min_idx_3d.tolist())))
+            print(f"Pruning: Iteration/layer={min_tensor_idx}, Index={tuple(min_idx_3d.tolist())}, Value before prune: {min_val}")
+
+            self.pruned_weights += tuple(min_idx_3d.tolist())
+
+            # Now reinitialize all weights to one according to lottery ticket theory
+            self.ini_weight_as_one(self.n_iterations)
+
+            print("--------------------------------------------")
+            print("First iteration of weights_cn after reinitialize:")
+            print(self.weights_cn[0])
+
+            # Prune
+            for (prune_iter, prune_indices) in self.pruned_weights_info:
+                with torch.no_grad():
+                    # Defensive: ensure tuple of ints
+                    if isinstance(prune_indices, (list, tuple)):
+                        if all(isinstance(idx, int) for idx in prune_indices):
+                            self.weights_cn[prune_iter][prune_indices] = 0.0
+                            print(f"Set weight to zero at {prune_indices}")
+                        else:
+                            print("ERROR: prune_indices contains non-integer elements:", prune_indices)
+                    else:
+                        print("ERROR: prune_indices is not a tuple or list:", prune_indices)
+
+            print("############################################")
+            print("First iteration of weights_cn after pruning:")
+            print(self.weights_cn[0])
+
+            # Save weights
+            self.save_weights()
+        else:
+            print("All weights are zero or no prunable weights found!")
+
 #helper functions
 def readAlist(directory):
     '''
@@ -677,9 +743,18 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 
     plot_loss(torch.cat((loss_pre_train, loss) , dim=0), decoder.path)
 
-# give parameters for the code and decoder
-train_nbp_weights(46, 2, 800, 6, 'GB')
+    return decoder
 
+# give parameters for the code and decoder
+NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
+
+for check_node in range(5):
+    for pruned_weight in range(120):
+        NBP_decoder.prune_weights()
+    print("Here we go again...")
+    NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True)
+
+print("Training and pruning completed.\n")
 
 #call the executable build from the C++ script 'simulateFER.cpp' for evulation
 #in case of compatibility issue or wanting to try other codes, re-complie 'simulateFER.cpp' on local machine
