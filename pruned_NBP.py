@@ -507,6 +507,17 @@ class NBP_oc(nn.Module):
         f.close()
 
 
+    def prune_weights(self):
+        """ Set lowest check node weight to zero"""
+
+        for idx, w in enumerate(self.weights_cn):
+            min_idx = torch.argmin(w)
+            min_idx_3d = torch.unravel_index(min_idx, w.shape)
+            print(f"Tensor {idx}: lowest weight before: {w[min_idx_3d].item()} at index {min_idx_3d}")
+            with torch.no_grad():
+                w[min_idx_3d] = 0.0
+
+
 #helper functions
 def readAlist(directory):
     '''
@@ -677,9 +688,18 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 
     plot_loss(torch.cat((loss_pre_train, loss) , dim=0), decoder.path)
 
-# give parameters for the code and decoder
-train_nbp_weights(46, 2, 800, 6, 'GB')
+    return decoder
 
+# give parameters for the code and decoder
+NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
+NBP_decoder.prune_weights()
+
+for check_node in range(5):
+    print("Here we go again...")
+    NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True)
+    NBP_decoder.prune_weights()
+
+print("Training and pruning completed.\n")
 
 #call the executable build from the C++ script 'simulateFER.cpp' for evulation
 #in case of compatibility issue or wanting to try other codes, re-complie 'simulateFER.cpp' on local machine
