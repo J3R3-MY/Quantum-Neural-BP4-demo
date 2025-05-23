@@ -510,12 +510,31 @@ class NBP_oc(nn.Module):
     def prune_weights(self):
         """ Set lowest check node weight to zero"""
 
+        min_val = None
+        min_tensor_idx = None
+        min_idx_3d = None
+
         for idx, w in enumerate(self.weights_cn):
-            min_idx = torch.argmin(w)
-            min_idx_3d = torch.unravel_index(min_idx, w.shape)
-            print(f"Tensor {idx}: lowest weight before: {w[min_idx_3d].item()} at index {min_idx_3d}")
+            nonzero_mask = w != 0
+            if torch.any(nonzero_mask):
+                nonzero_vals = w[nonzero_mask]
+                local_min_val = torch.min(nonzero_vals).item()
+                # Find its index in the original tensor
+                min_positions = (w == local_min_val).nonzero(as_tuple=True)
+                # To avoid multiple matches, pick the first one
+                local_min_3d = tuple(m[0].item() for m in min_positions)
+                if (min_val is None) or (local_min_val < min_val):
+                    min_val = local_min_val
+                    min_tensor_idx = idx
+                    min_idx_3d = local_min_3d
+
+        if min_tensor_idx is not None:
+            w = self.weights_cn[min_tensor_idx]
+            print(f"Tensor {min_tensor_idx}: global lowest nonzero weight before: {w[min_idx_3d].item()} at index {min_idx_3d}")
             with torch.no_grad():
                 w[min_idx_3d] = 0.0
+        else:
+            print("All weights are zero!")
 
 
 #helper functions
@@ -694,7 +713,7 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
 NBP_decoder.prune_weights()
 
-for check_node in range(5):
+for check_node in range(30):
     print("Here we go again...")
     NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True)
     NBP_decoder.prune_weights()
