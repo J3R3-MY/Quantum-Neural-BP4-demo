@@ -60,9 +60,8 @@ class NBP_oc(nn.Module):
         self.synz = torch.remainder(torch.transpose(self.synz, 2, 0), 2)
         return torch.cat((self.synz, self.synx), dim=1)
 
-    def loss(self, Gamma) -> torch.Tensor:
-        """loss functions proposed in [1] eq. 11"""
-
+    def loss(self, Gamma, l2_lambda=1e-4) -> torch.Tensor:
+        """loss functions proposed in [1] eq. 11 with L2 regression"""
         # first row, anti-commute with X, second row, anti-commute with Z, [1] eq. 10
         prob = torch.sigmoid(-1.0 * Gamma).float()
 
@@ -74,8 +73,7 @@ class NBP_oc(nn.Module):
         assert not torch.isnan(prob_aX).any()
         assert not torch.isnan(prob_aZ).any()
 
-        #Depend on if the error commute with the entries in S_dual, which is denoted as G here
-        #CSS constructions gives the simplification that Gx contains only X entries, and Gz contains on Z
+        # Depend on if the error commute with the entries in S_dual, which is denoted as G here
         correctionx = torch.zeros_like(self.errorx)
         correctionz = torch.zeros_like(self.errorz)
 
@@ -89,20 +87,25 @@ class NBP_oc(nn.Module):
         correctionx[self.qy == 1] = 1 - prob_aZ[self.qy == 1]
         correctionx[self.qi == 1] = prob_aZ[self.qi == 1]
 
-        #first summ up the probability of anti-commute for all elements in each row of G
         synx = torch.matmul(self.Gz, torch.transpose(correctionx.float(), 0, 1))
         synz = torch.matmul(self.Gx, torch.transpose(correctionz.float(), 0, 1))
         synx = torch.transpose(synx, 2, 0)
         synz = torch.transpose(synz, 2, 0)
         syn_real = torch.cat((synz, synx), dim=1)
 
-        #the take the sin function, then summed up for all rows of G
         loss = torch.zeros(1, self.batch_size)
         for b in range(self.batch_size):
-            loss[0, b] = torch.sum(torch.abs(torch.sin(np.pi / 2 * syn_real[b, :, :])))
+            loss[0, b] = torch.sum(torch.abs(torch.sin(torch.pi / 2 * syn_real[b, :, :])))
 
         assert not torch.isnan(loss).any()
         assert not torch.isinf(loss).any()
+
+        # --- L2 Regularization ---
+        l2_reg = torch.tensor(0., device=loss.device)
+        for param in self.parameters():
+            l2_reg += torch.norm(param, 2) ** 2
+
+        loss = loss + l2_lambda * l2_reg
 
         return loss
 
@@ -711,14 +714,6 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 
 # give parameters for the code and decoder
 NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
-NBP_decoder.prune_weights()
-
-for check_node in range(5):
-    print("Here we go again...")
-    NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True)
-    NBP_decoder.prune_weights()
-
-print("Training and pruning completed.\n")
 
 #call the executable build from the C++ script 'simulateFER.cpp' for evulation
 #in case of compatibility issue or wanting to try other codes, re-complie 'simulateFER.cpp' on local machine
