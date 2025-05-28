@@ -35,6 +35,7 @@ class NBP_oc(nn.Module):
 
         self.xhat = torch.zeros((batch_size, self.n))
         self.zhat = torch.zeros((batch_size, self.n))
+        self.pruned_weights = []
         self.load_matrices()
 
         if not folder_weights:
@@ -532,6 +533,7 @@ class NBP_oc(nn.Module):
             w = self.weights_cn[min_tensor_idx]
             print(f"Tensor {min_tensor_idx}: global lowest nonzero weight before: {w[min_idx_3d].item()} at index {min_idx_3d}")
             with torch.no_grad():
+                self.pruned_weights += min_idx_3d
                 w[min_idx_3d] = 0.0
         else:
             print("All weights are zero!")
@@ -713,13 +715,16 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
 NBP_decoder.prune_weights()
 
-for check_node in range(30):
+for check_node in range(10):
     print("Here we go again...")
     NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True)
-    NBP_decoder.prune_weights()
+    for pruned_weight in range(10):
+        NBP_decoder.prune_weights()
 
 print("Training and pruning completed.\n")
 
+for pruned_weight in NBP_decoder.pruned_weights:
+    print(f"pruned weight: {NBP_decoder.weights_cn[pruned_weight]}")
 #call the executable build from the C++ script 'simulateFER.cpp' for evulation
 #in case of compatibility issue or wanting to try other codes, re-complie 'simulateFER.cpp' on local machine
 import subprocess
