@@ -2,6 +2,7 @@
 import torch
 import sys
 import torch.nn as nn
+import torch.nn.utils.prune as prune
 import numpy as np
 import os
 from tqdm import tqdm
@@ -508,70 +509,55 @@ class NBP_oc(nn.Module):
         f.close()
 
 
-    def prune_weights(self):
+    def prune_weights(self, amount=0.1):
         """
-        Finds the minimum nonzero weight in weights_cn, saves it to a list, resets all weights to one, and prunes the minimum weight.
+        Prunes a specified percentage of the lowest-magnitude weights globally across all weights_cn tensors.
         """
-        # Find minimum nonzero weight in weights_cn (across all layers/iterations)
-        min_val = None
-        min_tensor_idx = None
-        min_idx_3d = None
+        # Wrap each tensor as a parameter in a dummy module
+        dummy_modules = []
+        check_nodes = []
 
-        print("++++++++++++++++++++++++++++++++++++++++++++")
-        print("First iteration of weights_cn before pruning:")
-        print(self.weights_cn[0])
 
-        for idx, w in enumerate(self.weights_cn):
-            nonzero_mask = w != 0
-            if torch.any(nonzero_mask):
-                nonzero_vals = w[nonzero_mask]
-                local_min_val = torch.min(nonzero_vals).item()
-                # Find its index in the original tensor
-                min_positions = (w == local_min_val).nonzero(as_tuple=True)
-                # To avoid multiple matches, pick the first one
-                local_min_3d = tuple(m[0].item() for m in min_positions)
-                if (min_val is None) or (local_min_val < min_val):
-                    min_val = local_min_val
-                    min_tensor_idx = idx  # This is the iteration/layer
-                    min_idx_3d = min_positions[0]  # This is a tuple (batch, check_node, column)
+        # print("++++++++++++++++++++++++++++++++++++++++++++")
+        # print("First iteration of weights_cn before pruning:")
+        # print(self.weights_cn[0])
 
-        if min_tensor_idx is not None and min_idx_3d is not None:
-            # Save the pruned weight indices as (iteration, index in weight tensor)
-            if not hasattr(self, "pruned_weights_info"):
-                self.pruned_weights_info = []
-            self.pruned_weights_info.append((min_tensor_idx, tuple(min_idx_3d.tolist())))
-            print(f"Pruning: Iteration/layer={min_tensor_idx}, Index={tuple(min_idx_3d.tolist())}, Value before prune: {min_val}")
+        for idx, tensor in enumerate(self.weights_cn):
+            dummy = nn.Module()
+            dummy.weight = nn.Parameter(tensor.data.clone())  # clone to avoid in-place modification if needed
+            dummy_modules.append(dummy)
+            check_nodes.append((dummy, 'weight'))
 
-            self.pruned_weights += tuple(min_idx_3d.tolist())
+        prune.global_unstructured(
+            check_nodes,
+            pruning_method=prune.L1Unstructured,
+            amount=amount,
+        )
 
-            # Now reinitialize all weights to one according to lottery ticket theory
-            self.ini_weight_as_one(self.n_iterations)
+        # Overwrite back the pruned weights into self.weights_cn
+        for idx, dummy in enumerate(dummy_modules):
+            # Remove the pruning reparam to make pruning permanent
+            prune.remove(dummy, 'weight')
+            self.weights_cn[idx] = dummy.weight.data
 
-            print("--------------------------------------------")
-            print("First iteration of weights_cn after reinitialize:")
-            print(self.weights_cn[0])
 
-            # Prune
-            for (prune_iter, prune_indices) in self.pruned_weights_info:
-                with torch.no_grad():
-                    # Defensive: ensure tuple of ints
-                    if isinstance(prune_indices, (list, tuple)):
-                        if all(isinstance(idx, int) for idx in prune_indices):
-                            self.weights_cn[prune_iter][prune_indices] = 0.0
-                            print(f"Set weight to zero at {prune_indices}")
-                        else:
-                            print("ERROR: prune_indices contains non-integer elements:", prune_indices)
-                    else:
-                        print("ERROR: prune_indices is not a tuple or list:", prune_indices)
+        # print("############################################")
+        # print("First iteration of weights_cn after pruning:")
+        # print(self.weights_cn[0])
 
-            print("############################################")
-            print("First iteration of weights_cn after pruning:")
-            print(self.weights_cn[0])
+        # Reset all unpruned weights to 1
+        for i, t in enumerate(self.weights_cn):
+            # Set pruned weights to 0, unpruned to 1, and make trainable
+            self.weights_cn[i] = nn.Parameter(
+                torch.where(t != 0, torch.tensor(1, dtype=t.dtype, device=t.device), t),
+                requires_grad=True
+            )
 
-            # Save weights
-            self.save_weights()
-        else:
-            print("All weights are zero or no prunable weights found!")
+        # print("--------------------------------------------")
+        # print("First iteration of weights_cn after pruning and resetting:")
+        # print(self.weights_cn[0])
+
+        self.save_weights()
 
 #helper functions
 def readAlist(directory):
@@ -747,11 +733,10 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 
 # give parameters for the code and decoder
 NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
-
-for check_node in range(5):
-    for pruned_weight in range(120):
-        NBP_decoder.prune_weights()
+for num in range(20):
     print("Here we go again...")
+    print(num)
+    NBP_decoder.prune_weights(0.05)
     NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True)
 
 print("Training and pruning completed.\n")
