@@ -727,49 +727,77 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 
     return decoder
 
-
+import os
+import shutil
 import ray
 from ray import tune
 import subprocess
 
+CODE_ROOT = os.path.dirname(os.path.abspath(__file__))
+PCM_PATH = os.path.join(CODE_ROOT, "PCMs", "GB_46_2")
+PCM_FILES = ["GB_46_2_Gx.alist", "GB_46_2_Gz.alist", "GB_46_2_H_800.alist"]  # Add all required files!
+NBP_JUPYTER_PATH = os.path.join(CODE_ROOT, "NBP_jupyter")
+
+def ensure_pcm_files(trial_dir):
+    """Copy PCM files into the trial directory if needed."""
+    dest_pcm_dir = os.path.join(trial_dir, "PCMs", "GB_46_2")
+    os.makedirs(dest_pcm_dir, exist_ok=True)
+    for fname in PCM_FILES:
+        src = os.path.join(PCM_PATH, fname)
+        dst = os.path.join(dest_pcm_dir, fname)
+        if not os.path.exists(dst):
+            shutil.copy(src, dst)
+    return dest_pcm_dir
+
 def run_evaluation_with_subprocess():
-    """
-    Runs the NBP_jupyter subprocess and returns the second number from the second line as a metric.
-    """
-    completed = subprocess.run(['./NBP_jupyter'], capture_output=True, text=True, timeout=120)
-    output_lines = completed.stdout.splitlines()
-    if len(output_lines) < 2:
-        return 1e6  # fallback: large error if something went wrong
     try:
-        # Second line: "0.1 <metric>"
+        completed = subprocess.run(
+            [NBP_JUPYTER_PATH],
+            capture_output=True,
+            text=True,
+            timeout=600
+        )
+        print("Subprocess STDOUT:\n", completed.stdout)
+        print("Subprocess STDERR:\n", completed.stderr)
+        output_lines = completed.stdout.splitlines()
+        if len(output_lines) < 2:
+            print("Not enough lines in subprocess output!")
+            return 1e6
         parts = output_lines[1].strip().split()
         metric = float(parts[1])
-    except Exception:
-        metric = 1e6  # fallback: large error if parsing failed
-    return metric
+        print(f"Metric parsed for Ray Tune: {metric}")
+        return metric
+    except Exception as e:
+        print("Subprocess or parsing failed:", e)
+        print("Working dir:", os.getcwd())
+        return 1e6
 
 def train_with_pruning_raytune(config):
-    n = 46
-    k = 2
-    m = 800
-    n_iterations = 6
-    codeType = 'GB'
-    amount = config["amount"]
-    n_cycles = config["n_cycles"]
+    try:
+        print("Ray Tune trial starting in directory:", os.getcwd())
+        ensure_pcm_files(os.getcwd())
+        n = 46
+        k = 2
+        m = 800
+        n_iterations = 6
+        codeType = 'GB'
+        amount = config["amount"]
+        n_cycles = config["n_cycles"]
 
-    # Initial training
-    NBP_decoder = train_nbp_weights(n, k, m, n_iterations, codeType)
-    for cycle in range(n_cycles):
-        NBP_decoder.prune_weights(amount)
-        NBP_decoder = train_nbp_weights(n, k, m, n_iterations, codeType, use_pretrained_weights=True)
+        NBP_decoder = train_nbp_weights(n, k, m, n_iterations, codeType)
+        for cycle in range(n_cycles):
+            NBP_decoder.prune_weights(amount)
+            NBP_decoder = train_nbp_weights(n, k, m, n_iterations, codeType, use_pretrained_weights=True)
 
-    # Evaluate using subprocess
-    metric = run_evaluation_with_subprocess()
-    tune.report(eval_metric=metric)
+        metric = run_evaluation_with_subprocess()
+        tune.report({"score": metric})  # ✅ correct usage
+    except Exception as e:
+        print(f"Trial failed with error: {e}")
+        tune.report({"score": 1e6})  # ✅ correct usage
 
 search_space = {
-    "amount": tune.uniform(0.01, 0.5),      # Prune between 1% and 50%
-    "n_cycles": tune.randint(1, 10),        # Try between 1 and 10 prune/train cycles
+    "amount": tune.uniform(0.01, 0.5),
+    "n_cycles": tune.randint(1, 10),
 }
 
 if __name__ == "__main__":
@@ -777,10 +805,13 @@ if __name__ == "__main__":
     analysis = tune.run(
         train_with_pruning_raytune,
         config=search_space,
-        metric="eval_metric",
-        mode="min",               # Lower is better for eval_metric
-        num_samples=10,           # Number of Ray Tune trials
-        resources_per_trial={"cpu": 2},  # Adjust as needed
+        metric="score",       # This will use the value from tune.report({"score": ...})
+        mode="min",
+        num_samples=10,
+        resources_per_trial={"cpu": 2},
+        storage_path=os.path.abspath("./ray_results"),
+        log_to_file=True,
+        fail_fast="raise"
     )
     print("Best config: ", analysis.best_config)
 
