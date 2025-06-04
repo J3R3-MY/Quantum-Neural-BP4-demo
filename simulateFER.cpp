@@ -45,12 +45,12 @@ int main(int argc, char *argv[]) {
     const auto max_frame_errors = arguments.maximum_frame_errors;
     const auto max_decoded_words = arguments.maximum_decoded_words;
 
-    std::cout << "% [[" << n << "," << k << +"]], " << m << " checks, " << decIterNum << " iter ";
-    if (trained)
-        std::cout << ",trained";
-    std::cout << "\n"
-              << "% collect " << max_frame_errors << " frame errors or " << max_decoded_words
-              << " decoded error patterns\n";
+    // std::cout << "% [[" << n << "," << k << +"]], " << m << " checks, " << decIterNum << " iter ";
+    // if (trained)
+    //     std::cout << ",trained";
+    // std::cout << "\n"
+    //           << "% collect " << max_frame_errors << " frame errors or " << max_decoded_words
+    //           << " decoded error patterns\n";
 
     //    omp_set_num_threads(1);
     for (double epsilon : ep_list) {
@@ -72,8 +72,9 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
-        std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
+        // std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
         std::cout << epsilon << " " << (failure / total_decoding) << "\\\\" << std::endl;
+        break;
     }
     return 0;
 }

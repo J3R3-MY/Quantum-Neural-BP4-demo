@@ -727,6 +727,64 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 
     return decoder
 
+
+import ray
+from ray import tune
+import subprocess
+
+def run_evaluation_with_subprocess():
+    """
+    Runs the NBP_jupyter subprocess and returns the second number from the second line as a metric.
+    """
+    completed = subprocess.run(['./NBP_jupyter'], capture_output=True, text=True, timeout=120)
+    output_lines = completed.stdout.splitlines()
+    if len(output_lines) < 2:
+        return 1e6  # fallback: large error if something went wrong
+    try:
+        # Second line: "0.1 <metric>"
+        parts = output_lines[1].strip().split()
+        metric = float(parts[1])
+    except Exception:
+        metric = 1e6  # fallback: large error if parsing failed
+    return metric
+
+def train_with_pruning_raytune(config):
+    n = 46
+    k = 2
+    m = 800
+    n_iterations = 6
+    codeType = 'GB'
+    amount = config["amount"]
+    n_cycles = config["n_cycles"]
+
+    # Initial training
+    NBP_decoder = train_nbp_weights(n, k, m, n_iterations, codeType)
+    for cycle in range(n_cycles):
+        NBP_decoder.prune_weights(amount)
+        NBP_decoder = train_nbp_weights(n, k, m, n_iterations, codeType, use_pretrained_weights=True)
+
+    # Evaluate using subprocess
+    metric = run_evaluation_with_subprocess()
+    tune.report(eval_metric=metric)
+
+search_space = {
+    "amount": tune.uniform(0.01, 0.5),      # Prune between 1% and 50%
+    "n_cycles": tune.randint(1, 10),        # Try between 1 and 10 prune/train cycles
+}
+
+if __name__ == "__main__":
+    ray.init(ignore_reinit_error=True)
+    analysis = tune.run(
+        train_with_pruning_raytune,
+        config=search_space,
+        metric="eval_metric",
+        mode="min",               # Lower is better for eval_metric
+        num_samples=10,           # Number of Ray Tune trials
+        resources_per_trial={"cpu": 2},  # Adjust as needed
+    )
+    print("Best config: ", analysis.best_config)
+
+"""
 # give parameters for the code and decoder
 NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
 for num in range(20):
@@ -741,3 +799,4 @@ print("Training and pruning completed.\n")
 #in case of compatibility issue or wanting to try other codes, re-complie 'simulateFER.cpp' on local machine
 import subprocess
 subprocess.call(["./NBP_jupyter"])
+"""
