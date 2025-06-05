@@ -62,14 +62,15 @@ int main(int argc, char *argv[]) {
 #pragma omp parallel
         {
             while (failure <= max_frame_errors && total_decoding <= max_decoded_words) {
-            		// Initiate Ensemble with worst case syndrome
                 // NBPs go here, one of the stabilizers will be used as the "main" one
                 stabilizerCodes main(n, k, m, codeType, matrix_supplier, trained);
                 main.add_error_given_epsilon(epsilon);
-                // Repeat the following with as many codes as desired
+                // Repeat the following with as many codes as desired TODO: Write a helper to make this more elegant
+                // TODO Adjust fileReader to take multiple weights of the same dimension
                 stabilizerCodes code2(n, k, m, codeType, matrix_supplier, trained,main.getErrorString(),main.getError());
                 code2.calculate_syndrome();
                 //->
+            		// Initiate Ensemble with worst case syndrome
 								std::vector<unsigned> initialSyndrome(code2.getSyndrome().size(), 1);
                 ensembleDecoder ensemble(initialSyndrome);
                 ensemble.updateGuess(code2.getSyndrome());
