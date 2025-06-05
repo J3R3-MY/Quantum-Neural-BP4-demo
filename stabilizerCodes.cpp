@@ -14,9 +14,9 @@
 #include <iostream>
 #include <random>
 #include <sstream>
+#include <vector>
 
-stabilizerCodes::stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerCodesType codeType, const fileReader &fr,
-                                 bool trained) {
+stabilizerCodes::stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerCodesType codeType, const fileReader &fr,  bool trained, std::vector<std::string> previousErrorString, std::vector<unsigned> previousError) {
     mycodetype = codeType;
     N = n;
     K = k;
@@ -34,6 +34,8 @@ stabilizerCodes::stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerC
     Nvk = fr.Nvk;
     Mck = fr.Mck;
     G = fr.G;
+    error = previousError;
+    errorString = previousErrorString;
     if (trained) {
         weights_cn = fr.weights_cn;
         weights_vn = fr.weights_vn;
@@ -41,11 +43,11 @@ stabilizerCodes::stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerC
     }
 }
 
-std::vector<bool> stabilizerCodes::decode(unsigned int L, double epsilon) {
+std::vector<bool> stabilizerCodes::decode(unsigned int L, double epsilon, std::vector<unsigned> ensembleSyn) {
     if (errorString.empty())
         return {true, true};
 
-    calculate_syndrome();
+		stabilizerCodes::setSyndrome(ensembleSyn);
     error_hat = std::vector<unsigned>(N, 0);
     return flooding_decode(L, epsilon);
 }

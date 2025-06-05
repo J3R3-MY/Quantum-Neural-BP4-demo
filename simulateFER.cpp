@@ -9,11 +9,13 @@
  *     Proc. IEEE Inform. Theory Workshop (ITW), Saint-Malo, France, Apr. 2023, https://arxiv.org/abs/2212.10245
  */
 #include "stabilizerCodes.h"
+#include "ensembleDecoder.h"
 
 #include "helpers.h"
 
 #include <iostream>
 #include <omp.h>
+#include <vector>
 
 int main(int argc, char *argv[]) {
     unsigned n = 46;
@@ -60,10 +62,20 @@ int main(int argc, char *argv[]) {
 #pragma omp parallel
         {
             while (failure <= max_frame_errors && total_decoding <= max_decoded_words) {
-                stabilizerCodes code(n, k, m, codeType, matrix_supplier, trained);
-                code.add_error_given_epsilon(epsilon);
+            		// Initiate Ensemble with worst case syndrome
+                // NBPs go here, one of the stabilizers will be used as the "main" one
+                stabilizerCodes main(n, k, m, codeType, matrix_supplier, trained);
+                main.add_error_given_epsilon(epsilon);
+                // Repeat the following with as many codes as desired
+                stabilizerCodes code2(n, k, m, codeType, matrix_supplier, trained,main.getErrorString(),main.getError());
+                code2.calculate_syndrome();
+                //->
+								std::vector<unsigned> initialSyndrome(code2.getSyndrome().size(), 1);
+                ensembleDecoder ensemble(initialSyndrome);
+                ensemble.updateGuess(code2.getSyndrome());
+                //<-
                 std::vector<bool> success;
-                success = code.decode(decIterNum, ep0);
+                success = code2.decode(decIterNum, ep0, ensemble.returnGuess());
 #pragma omp critical
                 {
                     if (!success[1])

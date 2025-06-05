@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 project(NBP_jupyter CXX)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_BUILD_TYPE Debug)
 
 link_libraries(stdc++fs)
 
@@ -9,6 +10,7 @@ add_executable(NBP_jupyter
         stabilizerCodes.cpp
         fileReader.cpp
         helpers.cpp
+				ensembleDecoder.cpp
         )
 
 find_package(OpenMP)

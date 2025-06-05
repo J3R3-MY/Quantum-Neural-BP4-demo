@@ -17,10 +17,9 @@
 
 class stabilizerCodes {
   public:
-    stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerCodesType codeType, const fileReader &fr,
-                    bool trained = false);
+    stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerCodesType codeType, const fileReader &fr, bool trained = false, std::vector<std::string> previousErrorString = {}, std::vector<unsigned> previousError = {});
 
-    std::vector<bool> decode(unsigned int L, double epsilon);
+    std::vector<bool> decode(unsigned int L, double epsilon, std::vector<unsigned> ensembleSyn);
 
     std::vector<bool> flooding_decode(unsigned int L, double epsilon);
 
@@ -35,6 +34,22 @@ class stabilizerCodes {
     void calculate_syndrome(); // also check if the error is all 0, if true, not decoding needed
 
     static double quantize_belief(double Taux, double Tauy, double Tauz);
+
+    const std::vector<unsigned>& getError() const{
+    	return error;
+    }
+
+    const std::vector<std::string>& getErrorString() const{
+    	return errorString;
+    }
+
+    void setSyndrome(const std::vector<unsigned>& newSyn){
+    	syn = newSyn;
+    }
+
+    const std::vector<unsigned>& getSyndrome() const{
+    	return syn;
+    }
 
   private:
     bool print_msg = false;
