@@ -13,7 +13,7 @@
 enum class stabilizerCodesType { GeneralizedBicycle = 0, HypergraphProduct = 1, toric = 3 };
 class fileReader {
   public:
-    fileReader(unsigned n, unsigned k, unsigned m, stabilizerCodesType codeType, bool trained = false);
+    fileReader(unsigned n, unsigned k, unsigned m, stabilizerCodesType codeType, bool trained = false, std::string specifier = "main");
     std::string code_type_string() const;
     std::experimental::filesystem::path construct_weights_path(std::string_view filename) const;
 
@@ -29,6 +29,7 @@ class fileReader {
     unsigned N;
     unsigned K;
     unsigned M;
+  	std::string specifier;
     unsigned G_rows;
     bool mTrained;
     unsigned trained_iter;
