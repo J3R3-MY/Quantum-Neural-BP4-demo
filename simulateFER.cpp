@@ -26,6 +26,8 @@ int main(int argc, char *argv[]) {
     bool trained = true;
     double ep0 = 0.1;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
+		DecoderAttributes list(n, k, m, codeType, trained);
+		std::vector<std::string> decoder_names{"main", "test"};
     fileReader matrix_supplier(n, k, m, codeType, trained);
     matrix_supplier.check_symplectic();
 
@@ -62,21 +64,9 @@ int main(int argc, char *argv[]) {
 #pragma omp parallel
         {
             while (failure <= max_frame_errors && total_decoding <= max_decoded_words) {
-                // NBPs go here, one of the stabilizers will be used as the "main" one
-                stabilizerCodes main(n, k, m, codeType, matrix_supplier, trained);
-                main.add_error_given_epsilon(epsilon);
-                // Repeat the following with as many codes as desired TODO: Write a helper to make this more elegant
-                // TODO Adjust fileReader to take multiple weights of the same dimension
-                stabilizerCodes code2(n, k, m, codeType, matrix_supplier, trained,main.getErrorString(),main.getError());
-                code2.calculate_syndrome();
-                //->
-            		// Initiate Ensemble with worst case syndrome
-								std::vector<unsigned> initialSyndrome(code2.getSyndrome().size(), 1);
-                ensembleDecoder ensemble(initialSyndrome);
-                ensemble.updateGuess(code2.getSyndrome());
-                //<-
+                ensembleDecoder dude(decoder_names, list, epsilon, matrix_supplier);
                 std::vector<bool> success;
-                success = code2.decode(decIterNum, ep0, ensemble.returnGuess());
+        				success = dude.decodeAllPaths(decIterNum, ep0);
 #pragma omp critical
                 {
                     if (!success[1])

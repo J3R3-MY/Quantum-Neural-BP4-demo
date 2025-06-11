@@ -19,11 +19,13 @@ class stabilizerCodes {
   public:
     stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerCodesType codeType, const fileReader &fr, bool trained = false, std::vector<std::string> previousErrorString = {}, std::vector<unsigned> previousError = {});
 
-    std::vector<bool> decode(unsigned int L, double epsilon, std::vector<unsigned> ensembleSyn);
+    std::vector<bool> decode(unsigned int L, double epsilon);
 
     std::vector<bool> flooding_decode(unsigned int L, double epsilon);
 
     std::vector<bool> check_success(const double *Taux, const double *Tauy, const double *Tauz);
+
+		std::vector<bool> ensemble_decode(unsigned int L, double epsilon, unsigned int ensemble_size);
 
     static inline bool trace_inner_product(unsigned a, unsigned b);
 
@@ -41,6 +43,10 @@ class stabilizerCodes {
 
     const std::vector<std::string>& getErrorString() const{
     	return errorString;
+    }
+
+    const std::vector<unsigned>& getErrorHat() const{
+    	return error_hat;
     }
 
     void setSyndrome(const std::vector<unsigned>& newSyn){
@@ -73,6 +79,8 @@ class stabilizerCodes {
     std::vector<std::vector<unsigned>> Mc;
     std::vector<std::vector<unsigned>> checkVal;
     std::vector<std::vector<unsigned>> varVal;
+
+  	std::vector<double> Taus;
 
     std::vector<std::vector<unsigned>> Nvk;
     std::vector<std::vector<unsigned>> Mck;

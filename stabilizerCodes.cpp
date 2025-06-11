@@ -43,11 +43,11 @@ stabilizerCodes::stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerC
     }
 }
 
-std::vector<bool> stabilizerCodes::decode(unsigned int L, double epsilon, std::vector<unsigned> ensembleSyn) {
+std::vector<bool> stabilizerCodes::decode(unsigned int L, double epsilon) {
     if (errorString.empty())
         return {true, true};
 
-		stabilizerCodes::setSyndrome(ensembleSyn);
+    calculate_syndrome();
     error_hat = std::vector<unsigned>(N, 0);
     return flooding_decode(L, epsilon);
 }
