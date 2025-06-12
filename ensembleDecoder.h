@@ -19,7 +19,7 @@ class ensembleDecoder{
 		ensembleDecoder(std::vector<std::string> decoder_names, DecoderAttributes list, double epsilon, fileReader& supplier);
 
 		std::vector<unsigned> returnGuess(){return estimatedError;};
-		void updateGuess(const std::vector<unsigned>& newCandidate, int index);
+		bool updateGuess(const std::vector<unsigned>& newCandidate, int index);
 
 		std::vector<std::string> list_of_specifiers;
 		std::vector<stabilizerCodes> list_of_decoders;
@@ -27,7 +27,6 @@ class ensembleDecoder{
 
 		// These two objects are needed for using some stabilizerCode functionality
     stabilizerCodes main;
-    fileReader fr;
 
 		std::vector<bool> decodeAllPaths(unsigned int L, double epsilon);
 		bool succesfully_decoded();

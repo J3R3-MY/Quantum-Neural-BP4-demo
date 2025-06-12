@@ -4,18 +4,20 @@
 #include <cstddef>
 
 ensembleDecoder::ensembleDecoder(std::vector<std::string> decoder_names, DecoderAttributes list, double epsilon, fileReader& fileReader): 	
-	list_of_specifiers(decoder_names), list(list), main(list.n, list.m, list.k, list.codeType, fileReader, list.trained), fr(list.n, list.k, list.m, list.codeType, list.trained){
+	list_of_specifiers(decoder_names), list(list), main(list.n, list.m, list.k, list.codeType, fileReader, list.trained){
 	initalize_decoders(epsilon);
 };
 
-void ensembleDecoder::updateGuess(const std::vector<unsigned>& candidate, int index) {
+bool ensembleDecoder::updateGuess(const std::vector<unsigned>& candidate, int index) {
     auto candidate_weight = std::count_if(candidate.begin(), candidate.end(), [](unsigned x){ return x != 0; });
     auto current_weight = std::count_if(estimatedError.begin(), estimatedError.end(), [](unsigned x){ return x != 0; });
 
     if (candidate_weight < current_weight) {
         estimatedError = candidate;
     		bestDecoder = index;
-  }
+    		return true;
+  	}
+  	return false;
 }
 
 // Initalizes decoder for ensemble
@@ -34,6 +36,7 @@ void ensembleDecoder::initalize_decoders(double epsilon){
 // This may be something that needs to happen in the main program
 std::vector<bool> ensembleDecoder::decodeAllPaths(unsigned int L, double epsilon){
 	std::vector<bool> success;
+	std::vector<bool> bestSuccess;
 
 	for (size_t i = 0; i < list_of_decoders.size(); ++i){
 		success = list_of_decoders[i].decode(L, epsilon);
@@ -41,11 +44,14 @@ std::vector<bool> ensembleDecoder::decodeAllPaths(unsigned int L, double epsilon
 		if(i == 0){
 			std::vector<unsigned> initialGuess(list_of_decoders[i].getSyndrome().size(), 1);
 			estimatedError = initialGuess;
+			bestSuccess = success;
 		}
 		if(success[0]){
-			updateGuess(list_of_decoders[i].getErrorHat(), i);
+			if(updateGuess(list_of_decoders[i].getErrorHat(), i)){
+				bestSuccess = success;
+			}
 		}
 	}
-	return list_of_decoders[bestDecoder].decode(L, epsilon);
+	return bestSuccess;
 }
 
