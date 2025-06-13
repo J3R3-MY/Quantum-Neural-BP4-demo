@@ -74,6 +74,10 @@ int main(int argc, char *argv[]) {
         }
         std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
         std::cout << epsilon << " " << (failure / total_decoding) << "\\\\" << std::endl;
+    		if (epsilon == 0.06){
+    			break;
+    			return 0;
+				}
     }
     return 0;
 }

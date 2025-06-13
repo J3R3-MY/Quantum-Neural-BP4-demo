@@ -13,7 +13,7 @@ import matplotlib.pylab as plt
 
 class NBP_oc(nn.Module):
     def __init__(self, n: int, k: int, m: int, m1: int, m2: int, codeType: str, n_iterations: int,
-                 folder_weights: bool = False,
+                 folder_weights: bool = False, name: str = "default",
                  batch_size: int = 1):
         super().__init__()
         self.name = "Neural BP Decoder"
@@ -27,7 +27,8 @@ class NBP_oc(nn.Module):
         self.m2 = m2
         #m is the number of rows of the full rank check matrix
         self.m = n - k
-        self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) + "/"
+        self.name = name
+        self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) +"_" + str(self.name) + "/"
         #If True, then all outgoing edges on the same CN has the same weight, configurable
         self.one_weight_per_cn = True
         self.rate = self.k / self.n
@@ -666,7 +667,7 @@ def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
                 errorz[b,p] = 1
     return errorx, errorz
 
-def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pretrained_weights:bool = False):
+def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pretrained_weights:bool = False, name: str = "default"):
     # give parameters for the code and decoder
     m1 = m // 2
     m2 = m // 2
@@ -686,7 +687,7 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 
     # path where the training weights are stored, also supports training with previously stored weights
     #initialize the decoder, all weights are set to 1
-    decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, use_pretrained_weights, batch_size)
+    decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, use_pretrained_weights, name, batch_size)
     # f = plt.figure(figsize=(5, 8))
     # plt.spy(decoder.H[0].detach().cpu().numpy(), markersize=1, aspect='auto')
     # plt.title("check matrix of the [["+str(n)+","+str(k)+"]] code with "+str(m)+" checks")
@@ -732,12 +733,20 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
     return decoder
 
 # give parameters for the code and decoder
-NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
-for num in range(20):
+trials = random.randint(1,3)
+percentage = random.uniform(0.01, 0.05)
+
+specifier = f"{trials}_{percentage}"
+
+print(specifier)
+
+NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', name = specifier)
+
+for num in range(trials):
     print("Here we go again...")
     print(num)
-    NBP_decoder.prune_weights(0.05)
-    NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True)
+    NBP_decoder.prune_weights(percentage)
+    NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True, name = specifier)
 
 print("Training and pruning completed.\n")
 
