@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     double ep0 = 0.1;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
 		DecoderAttributes list(n, k, m, codeType, trained);
-		std::vector<std::string> decoder_names{"main", "test"};
+		std::vector<std::string> decoder_names{"somePruned", "sisi", "notNeural"};
     fileReader matrix_supplier(n, k, m, codeType, trained);
     matrix_supplier.check_symplectic();
 
