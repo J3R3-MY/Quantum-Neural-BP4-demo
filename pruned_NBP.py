@@ -41,8 +41,11 @@ class NBP_oc(nn.Module):
         self.load_matrices()
 
         if not folder_weights:
+            if self.codeType == 'toric':
+                self.ini_weight_as_one_toric(n_iterations)
             #initilize weights with 1 if none given
-            self.ini_weight_as_one(n_iterations)
+            else:
+                self.ini_weight_as_one(n_iterations)
         else:
             # load pretrained weights stored in directory "folder":
             self.load_weights(self.device)
@@ -199,8 +202,17 @@ class NBP_oc(nn.Module):
         outgoing_messages = (outgoing_messages * weights_cn).float()
         return outgoing_messages
 
-    def forward(self, errorx: torch.Tensor, errorz: torch.Tensor, ep: float, batch_size=1) -> torch.Tensor:
-        """main decoding procedure"""
+    
+    def forward(self, errorx: torch.Tensor, errorz: torch.Tensor, ep: float, batch_size=1):
+        if self.codeType == 'GB':
+            return self._forward_gb(errorx, errorz, ep, batch_size)
+        elif self.codeType == 'toric':
+            return self._forward_toric(errorx, errorz, ep, batch_size)
+        else:
+            raise ValueError(f"Unknown codeType: {self.codeType}")
+
+    def _forward_gb(self, errorx: torch.Tensor, errorz: torch.Tensor, ep: float, batch_size=1):
+        """main decoding procedure for GB"""
         loss_array = torch.zeros(self.batch_size, self.n_iterations).float().to(self.device)
 
         assert batch_size == self.batch_size
@@ -233,50 +245,104 @@ class NBP_oc(nn.Module):
         messages_cn_to_vn = torch.zeros((batch_size, self.m_oc, self.n)).to(self.device)
         self.batch_size = batch_size
 
-        # initlize VN message
-        messages_vn_to_cn, _, _ = self.variable_node_update(messages_cn_to_vn, llr, self.weights_vn[0],
-                                                            self.weights_llr[0])
+        messages_vn_to_cn, _, _ = self.variable_node_update(messages_cn_to_vn, llr, self.weights_vn[0], self.weights_llr[0])
 
-        # iteratively decode, decode will continue till the max. iteration, even if the syndrome already matched
         for i in range(self.n_iterations):
-
             assert not torch.isnan(self.weights_llr[i]).any()
             assert not torch.isnan(self.weights_cn[i]).any()
             assert not torch.isnan(messages_cn_to_vn).any()
-
-            # check node update:
             messages_cn_to_vn = self.check_node_update(messages_vn_to_cn, self.weights_cn[i])
-
             assert not torch.isnan(messages_cn_to_vn).any()
             assert not torch.isinf(messages_cn_to_vn).any()
-
-            # variable node update:
-            messages_vn_to_cn, Tau, Tau_all = self.variable_node_update(messages_cn_to_vn, llr, self.weights_vn[i + 1],
-                                                                        self.weights_llr[i + 1])
-
+            messages_vn_to_cn, Tau, Tau_all = self.variable_node_update(messages_cn_to_vn, llr, self.weights_vn[i + 1], self.weights_llr[i + 1])
             assert not torch.isnan(messages_vn_to_cn).any()
             assert not torch.isinf(messages_vn_to_cn).any()
             assert not torch.isnan(Tau).any()
             assert not torch.isinf(Tau).any()
-
             loss_array[:, i] = self.loss(Tau_all)
-
 
         _, minIdx = torch.min(loss_array, dim=1, keepdim=False)
 
-
         loss = torch.zeros(self.batch_size, ).float().to(self.device)
-        #take average of the loss for the first iterations till the loss is minimized
         for b in range(batch_size):
             for idx in range(minIdx[b] + 1):
                 loss[b] += loss_array[b, idx]
             loss[b] /= (minIdx[b] + 1)
-
         loss = torch.sum(loss, dim=0) / self.batch_size
 
         assert not torch.isnan(loss)
         assert not torch.isinf(loss)
         return loss
+
+    def _forward_toric(self, errorx: torch.Tensor, errorz: torch.Tensor, ep: float, batch_size=1):
+        """main decoding procedure for toric"""
+        loss_array = torch.zeros(self.batch_size, self.n_iterations).float().to(self.device)
+
+        assert batch_size == self.batch_size
+
+        self.errorx = errorx.to(self.device)
+        self.errorz = errorz.to(self.device)
+
+        self.qx = torch.zeros_like(self.errorx)
+        self.qz = torch.zeros_like(self.errorx)
+        self.qy = torch.zeros_like(self.errorx)
+        self.qi = torch.ones_like(self.errorx)
+
+        self.qx[self.errorx == 1] = 1
+        self.qx[self.errorz == 1] = 0
+
+        self.qz[self.errorz == 1] = 1
+        self.qz[self.errorx == 1] = 0
+
+        self.qy[self.errorz == 1] = 1
+        self.qy[self.errorx != self.errorz] = 0
+
+        self.qi[self.errorx == 1] = 0
+        self.qi[self.errorz == 1] = 0
+
+        self.syn = self.calculate_self_syn()
+
+        # initial LLR to, first equation in [1,Sec.II-C]
+        llr = np.log(3 * (1 - ep) / ep)
+
+        messages_cn_to_vn = torch.zeros((batch_size, self.m_oc, self.n)).to(self.device)
+        self.batch_size = batch_size
+
+        messages_vn_to_cn, _, _ = self.variable_node_update(messages_cn_to_vn, llr, self.weights_vn[0], self.weights_llr[0])
+
+        for i in range(self.n_iterations):
+            assert not torch.isnan(self.weights_llr[i]).any()
+            assert not torch.isnan(self.weights_cn[i]).any()
+            assert not torch.isnan(messages_cn_to_vn).any()
+            messages_cn_to_vn = self.check_node_update(messages_vn_to_cn, self.weights_cn[i])
+            assert not torch.isnan(messages_cn_to_vn).any()
+            assert not torch.isinf(messages_cn_to_vn).any()
+            messages_vn_to_cn, Tau, Tau_all = self.variable_node_update(messages_cn_to_vn, llr, self.weights_vn[i + 1], self.weights_llr[i + 1])
+            assert not torch.isnan(messages_vn_to_cn).any()
+            assert not torch.isinf(messages_vn_to_cn).any()
+            assert not torch.isnan(Tau).any()
+            assert not torch.isinf(Tau).any()
+            loss_array[:, i] = self.loss(Tau_all)
+
+        _, minIdx = torch.min(loss_array, dim=1, keepdim=False)
+
+        loss = torch.zeros(self.batch_size, ).float().to(self.device)
+        loss_min = torch.zeros(self.batch_size, ).float().to(self.device)
+        for b in range(batch_size):
+            # for idx in range(minIdx[b] + 1):
+            #     loss[b] += loss_array[b, idx]
+            # loss[b] /= (minIdx[b] + 1)
+            loss_min[b] = loss_array[b, minIdx[b]]
+            for idx in range(self.n_iterations):
+                loss[b] += loss_array[b, idx]
+            loss[b] /= self.n_iterations
+
+        loss = torch.sum(loss, dim=0) / self.batch_size
+        loss_min = torch.sum(loss_min, dim=0) / self.batch_size
+
+        assert not torch.isnan(loss)
+        assert not torch.isinf(loss)
+        return loss, loss_min
 
 
     def check_syndrome(self, Tau):
@@ -363,6 +429,58 @@ class NBP_oc(nn.Module):
 
         self.H = torch.cat((self.Hx, self.Hz), dim=1).float().to(self.device)
         self.H_reverse = 1 - self.H
+
+
+    def ini_weight_as_one_toric(self, n_iterations: int):
+        """this function can be configured to determine which parameters are trainablecan be configured to determine which parameters are trainable"""
+        """this function can be configured to determine which parameters are trainablecan be configured to determine which parameters are trainable"""
+        self.weights_llr = []
+        self.weights_cn = []
+        self.weights_vn = []
+        if self.m_oc < self.n:
+            self.weights_llr = []
+            self.weights_cn = []
+            self.weights_vn = []
+            for i in range(n_iterations):
+                if self.one_weight_per_cn:
+                    self.weights_cn.append(torch.ones((1, self.m_oc, 1), requires_grad=True, device=self.device))
+                else:
+                    self.weights_cn.append(torch.ones((1, self.m_oc, self.n), requires_grad=True, device=self.device))
+                self.weights_llr.append(torch.ones((1, 1, self.n), requires_grad=True, device=self.device))
+                self.weights_vn.append(torch.ones(1, self.m_oc, self.n, requires_grad=True, device=self.device))
+            self.weights_vn.append(torch.ones(1, self.m_oc, self.n, requires_grad=True, device=self.device))
+            self.weights_llr.append(torch.ones((1, 1, self.n), requires_grad=True, device=self.device))
+        else:
+            self.ini_weights = np.array([1.0,0.1])
+            temp = self.ini_weights[0] * np.ones((1, 1, self.n))
+            l1 = (self.n) // 2
+            l2 = self.m_oc // 2 - l1
+
+            temp_vn = []
+            if self.one_weight_per_cn:
+                temp_vn = np.concatenate((np.ones((1, l1, 1)), self.ini_weights[1] * np.ones((1, l2, 1))),
+                                         axis=1)
+            else:
+                temp_vn = np.concatenate(
+                    (np.ones((1, l1, self.n)),
+                     self.ini_weights[1] * np.ones((1, l2, self.n))), axis=1)
+            temp_vn = np.concatenate((temp_vn, temp_vn), axis=1)
+
+            for i in range(n_iterations):
+                self.weights_llr.append(torch.from_numpy(temp).float().to(self.device))
+                self.weights_llr[i].requires_grad = True
+
+                self.weights_vn.append(torch.ones(1, self.m_oc, self.n, requires_grad=True, device=self.device))
+                self.weights_cn.append(torch.from_numpy(temp_vn).float().to(self.device))
+                self.weights_cn[i].requires_grad = True
+
+
+
+            self.weights_llr.append(torch.from_numpy(temp).float().to(self.device))
+            self.weights_llr[i].requires_grad = True
+            self.weights_llr[n_iterations].requires_grad = True
+            self.weights_vn.append(torch.ones(1, self.m_oc, self.n, requires_grad=True, device=self.device))
+        self.save_weights()
 
     def ini_weight_as_one(self, n_iterations: int):
         """this function can be configured to determine which parameters are trainablecan be configured to determine which parameters are trainable"""
@@ -722,7 +840,7 @@ def plot_loss(loss, path, myrange = 0):
     else:
         plt.plot(range(1, loss.size(dim=0)+1),loss,marker='.')
     plt.show()
-    file_name = path + "loss.pdf"
+    file_name = str(path) + "loss.pdf"
     f.savefig(file_name)
     plt.close()
 
