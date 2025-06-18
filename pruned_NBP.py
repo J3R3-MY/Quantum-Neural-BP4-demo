@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.utils.prune as prune
 import numpy as np
 import os
+import subprocess
 from tqdm import tqdm
 import random
 import matplotlib.pylab as plt
@@ -664,42 +665,60 @@ def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
 
 def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pretrained_weights:bool = False):
     # give parameters for the code and decoder
+    # n = L * L * 2
     m1 = m // 2
     m2 = m // 2
 
     # give parameters for training
     #learning rate
-    lr = 0.001
+    lr = 0.1
     #training for fixed epsilon_0
     ep0 = 0.1
     #train on errors of weight ranging from r1 to r2
-    r1 = 2
-    r2 = 3
-    # number of updates
-    n_batches = 1500
-    #number of error patterns in each mini batch
-    batch_size = 100
+    if (codeType == 'GB'):
+        lr = 0.001
+        r1 = 2
+        r2 = 3
+        # number of updates
+        n_batches = 1500
+
+        #number of error patterns in each mini batch
+        batch_size = 100
+    elif(codeType == 'toric'):
+        m = 3*n  # number of checks, can also use 46 or 44
+        ep1=0.03
+        num_points = 6
+        sep=0.01
+        if m==3*n:
+            ep0 = 0.37
+            ep1+=0.06
+
+        # number of updates
+        n_batches = 100
+
+        #number of error patterns in each mini batch
+        batch_size = 20*num_points
 
     # path where the training weights are stored, also supports training with previously stored weights
     #initialize the decoder, all weights are set to 1
     decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, use_pretrained_weights, batch_size)
-    # f = plt.figure(figsize=(5, 8))
-    # plt.spy(decoder.H[0].detach().cpu().numpy(), markersize=1, aspect='auto')
-    # plt.title("check matrix of the [["+str(n)+","+str(k)+"]] code with "+str(m)+" checks")
-    # plt.show()
 
-    #for comparision, also plot the original check matrix
-    # decoder_2 = NBP_oc(n, k, n-k, m1,m2, codeType, n_iterations, batch_size=batch_size, folder_weights=None)
-    # f = plt.figure(figsize=(5, 3))
-    # plt.spy(decoder_2.H[0].detach().cpu().numpy(), markersize=1, aspect='auto')
-    # plt.title("check matrix of the [["+str(n)+","+str(k)+"]] code with "+str(n-k)+" checks")
-    # plt.show()
-    #
+    if (codeType == 'GB'): 
+        #trainable parameters
+        parameters = decoder.weights_llr + decoder.weights_cn
+        #use Adam
+        optimizer = torch.optim.Adam(parameters, lr=lr)
 
-    #trainable parameters
-    parameters = decoder.weights_llr + decoder.weights_cn
-    #use Adam
-    optimizer = torch.optim.Adam(parameters, lr=lr)
+    elif (codeType == 'toric'):
+
+        optimizer = torch.optim.SGD([
+            {'params': decoder.weights_llr, 'lr': lr},
+            {'params': decoder.weights_vn,'lr': lr},
+            {'params': decoder.weights_cn,'lr': lr}
+            ])
+        # could also use Adam, not making too much difference
+        # optimizer = torch.optim.Adam(parameters, lr=lr)
+        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=1.0, end_factor=0.1, total_iters=1200)
 
     print('--- Training Metadata ---')
     print(f'Code: n={decoder.n}, k={decoder.k}, PCM rows={decoder.m1},{decoder.m2}')
@@ -711,33 +730,43 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
     print(f'error patterns per batch = {batch_size}')
     print(f'learning rate = {lr}\n')
 
-    #pre-training stage, basically only the parameters for the first iteration is trained
-    loss_pre_train = training_loop(decoder, optimizer, r1, r2, ep0, n_batches, decoder.path)
-    plot_loss(loss_pre_train, decoder.path)
+    if (codeType == 'GB'): 
+        #pre-training stage, basically only the parameters for the first iteration is trained
+        loss_pre_train = training_loop(decoder, optimizer, r1, r2, ep0, n_batches, decoder.path)
+        plot_loss(loss_pre_train, decoder.path)
 
 
-    #continue to train with higher weight errors, mostly for the later iterations
-    r1 = 3
-    r2 = 9
+        #continue to train with higher weight errors, mostly for the later iterations
+        r1 = 3
+        r2 = 9
 
-    n_batches = 600
-    loss = training_loop(decoder, optimizer, r1, r2, ep0, n_batches, decoder.path)
+        n_batches = 600
+        loss = training_loop(decoder, optimizer, r1, r2, ep0, n_batches, decoder.path)
 
-    plot_loss(torch.cat((loss_pre_train, loss) , dim=0), decoder.path)
+        plot_loss(torch.cat((loss_pre_train, loss) , dim=0), decoder.path)
+
+
+
+    elif (codeType == 'toric'):
+        cpp_executable = './NBP_jupyter'
+        cpp_parameters = ['-d','128','2',str(m), '25', '1', '-i',str(ep0),'-r','0.15','0.015','0.015']
+        # training stage
+        loss = torch.Tensor()
+        print("Plotting loss...")
+        loss_pre_train = training_loop(decoder, optimizer, ep1, sep,num_points, ep0, n_batches, decoder.path, scheduler=scheduler)
+        loss = torch.cat((loss, loss_pre_train), dim=0)
+        plot_loss(loss, decoder.path) #its ok if it doesn't converge to 0
+        plot_loss(loss_pre_train, decoder.path)
+        subprocess.call([cpp_executable] + cpp_parameters)
 
     return decoder
 
 # give parameters for the code and decoder
 NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
-for num in range(20):
-    print("Here we go again...")
-    print(num)
-    NBP_decoder.prune_weights(0.05)
-    NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True)
 
 print("Training and pruning completed.\n")
 
 #call the executable build from the C++ script 'simulateFER.cpp' for evulation
 #in case of compatibility issue or wanting to try other codes, re-complie 'simulateFER.cpp' on local machine
-import subprocess
-subprocess.call(["./NBP_jupyter"])
+if (NBP_decoder.codeType == 'GB'):
+    subprocess.call(["./NBP_jupyter"])
