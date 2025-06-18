@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
 
     int decIterNum = 6;
     bool trained = true;
-    double ep0 = 0.1;
+    double ep0 = 0.3;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
 		DecoderAttributes list(n, k, m, codeType, trained);
 		std::vector<std::string> decoder_names{"somePruned", "sisi", "notNeural"};
