@@ -605,6 +605,45 @@ def optimization_step(decoder: NBP_oc, ep0, optimizer: torch.optim.Optimizer, er
    return loss.detach()
 
 
+def optimization_toric(decoder: NBP_oc, ep0, optimizer: torch.optim.Optimizer, errorx, errorz, scheduler=None):
+    # call the forward function
+    loss, loss_min = decoder(errorx, errorz, ep0, decoder.batch_size)
+
+    # delete old gradients.
+    optimizer.zero_grad()
+    # calculate gradient
+    loss_min.backward()
+    clip_value = 0.001
+    for p in range(decoder.n_iterations):
+        decoder.weights_vn[p].grad.data.clamp_(-clip_value, clip_value)
+        decoder.weights_cn[p].grad.data.clamp_(-clip_value, clip_value)
+        decoder.weights_llr[p].grad.data.clamp_(-clip_value, clip_value)
+    #
+
+    # update weights
+    optimizer.step()
+    scheduler.step()
+
+    # print(f'loss: {loss}')
+    # print('cn gradient===========')
+    # for i in range(decoder.n_iterations):
+    #     weights_cn_grad = decoder.weights_cn[i].grad.detach().clone().cpu()
+    #     print(
+    #         f'it. {i}, ave. abs. {np.average(abs(weights_cn_grad))}, ave. {np.average(weights_cn_grad)}')
+    # print('vn gradient===========')
+    # for i in range(decoder.n_iterations):
+    #     weights_cn_grad = decoder.weights_vn[i].grad.detach().clone().cpu()
+    #     print(
+    #         f'it. {i}, ave. abs. {np.average(abs(weights_cn_grad))}, ave. {np.average(weights_cn_grad)}')
+    # print('llr gradient===========')
+    # for i in range(decoder.n_iterations):
+    #     weights_llr_grad = decoder.weights_llr[i].grad.detach().clone().cpu()
+    #     print(f'it. {i}, ave. abs. {np.average(abs(weights_llr_grad))}, ave. {np.average(weights_llr_grad)}')
+
+
+    return loss.detach(), loss_min.detach()
+
+
 def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0, num_batch, path):
     print(f'training on random errors, weight from {r1} to {r2} ')
     loss_length = num_batch
@@ -632,6 +671,49 @@ def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0
 
     print('Training completed.\n')
     return loss
+
+def addDeploarizationErrorGiveEp(n: int, ep:float, batch_size:int = 1):
+    errorx = torch.zeros((batch_size, n))
+    errorz = torch.ones((batch_size, n))
+    np.random.seed()
+    for b in range(batch_size):
+        a = torch.from_numpy(np.random.rand(n,))
+        # iny = (a <= ep / 3).reshape(n,)
+        errorx[b, (a <= 2.0 * ep / 3.0)] = 1
+        errorz[b, (a < ep / 3.0)] = 0
+        errorz[b, (a > ep)] = 0
+    return errorx, errorz
+
+def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_batch, path, scheduler=None):
+    print(f'training on random errors, epsilon from {ep1} to {ep1+sep*(num_points-1)} ')
+    loss_length = num_batch
+    loss = torch.zeros(loss_length)
+    loss_min = torch.zeros(loss_length)
+
+    idx = 0
+    with tqdm(total=loss_length) as pbar:
+        for i_batch in range(num_batch):
+            errorx = torch.tensor([])
+            errorz = torch.tensor([])
+            for i in range(num_points):
+                ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1+i*sep, decoder.batch_size//num_points)
+                errorx = torch.cat((errorx, ex), dim=0)
+                errorz = torch.cat((errorz, ez), dim=0)
+
+
+            loss[idx], loss_min[idx] = optimization_toric(decoder, ep0, optimizer, errorx, errorz,scheduler)
+            pbar.update(1)
+            pbar.set_description(f"loss {loss[idx]:.2f}, loss min {loss_min[idx]:.2f}, lr {scheduler.get_last_lr()[1]:.2f}")
+            idx += 1
+
+
+            if ((i_batch+1)%100==0):
+                decoder.save_weights()
+                plot_loss(loss_min[0:idx-1], path=None)
+
+    decoder.save_weights()
+    print('Training completed.\n')
+    return loss_min
 
 def plot_loss(loss, path, myrange = 0):
     f = plt.figure(figsize=(8, 5))
@@ -685,6 +767,7 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
         #number of error patterns in each mini batch
         batch_size = 100
     elif(codeType == 'toric'):
+        torch.autograd.set_detect_anomaly(True)
         m = 3*n  # number of checks, can also use 46 or 44
         ep1=0.03
         num_points = 6
@@ -753,7 +836,7 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
         # training stage
         loss = torch.Tensor()
         print("Plotting loss...")
-        loss_pre_train = training_loop(decoder, optimizer, ep1, sep,num_points, ep0, n_batches, decoder.path, scheduler=scheduler)
+        loss_pre_train = training_toric(decoder, optimizer, ep1, sep,num_points, ep0, n_batches, decoder.path, scheduler=scheduler)
         loss = torch.cat((loss, loss_pre_train), dim=0)
         plot_loss(loss, decoder.path) #its ok if it doesn't converge to 0
         plot_loss(loss_pre_train, decoder.path)
@@ -762,7 +845,7 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
     return decoder
 
 # give parameters for the code and decoder
-NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB')
+NBP_decoder = train_nbp_weights(128, 2, 128*3, 25, 'toric')
 
 print("Training and pruning completed.\n")
 
