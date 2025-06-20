@@ -1,0 +1,161 @@
+5_0.1
+--- Training Metadata ---
+Code: n=46, k=2, PCM rows=400,400
+device: cuda
+training ep0 = 0.1
+Decoder: 5_0.1
+decoding iterations = 6
+number of batches = 1500
+error patterns per batch = 100
+learning rate = 0.001
+
+training on random errors, weight from 2 to 3 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+training on random errors, weight from 3 to 9 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+Here we go again...
+0
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+continue training with previous weights
+--- Training Metadata ---
+Code: n=46, k=2, PCM rows=400,400
+device: cuda
+training ep0 = 0.1
+Decoder: 5_0.1
+decoding iterations = 6
+number of batches = 1500
+error patterns per batch = 100
+learning rate = 0.001
+
+training on random errors, weight from 2 to 3 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+training on random errors, weight from 3 to 9 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+Here we go again...
+1
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+continue training with previous weights
+--- Training Metadata ---
+Code: n=46, k=2, PCM rows=400,400
+device: cuda
+training ep0 = 0.1
+Decoder: 5_0.1
+decoding iterations = 6
+number of batches = 1500
+error patterns per batch = 100
+learning rate = 0.001
+
+training on random errors, weight from 2 to 3 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+training on random errors, weight from 3 to 9 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+Here we go again...
+2
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+continue training with previous weights
+--- Training Metadata ---
+Code: n=46, k=2, PCM rows=400,400
+device: cuda
+training ep0 = 0.1
+Decoder: 5_0.1
+decoding iterations = 6
+number of batches = 1500
+error patterns per batch = 100
+learning rate = 0.001
+
+training on random errors, weight from 2 to 3 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+training on random errors, weight from 3 to 9 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+Here we go again...
+3
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+continue training with previous weights
+--- Training Metadata ---
+Code: n=46, k=2, PCM rows=400,400
+device: cuda
+training ep0 = 0.1
+Decoder: 5_0.1
+decoding iterations = 6
+number of batches = 1500
+error patterns per batch = 100
+learning rate = 0.001
+
+training on random errors, weight from 2 to 3 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+training on random errors, weight from 3 to 9 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+Here we go again...
+4
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+continue training with previous weights
+--- Training Metadata ---
+Code: n=46, k=2, PCM rows=400,400
+device: cuda
+training ep0 = 0.1
+Decoder: 5_0.1
+decoding iterations = 6
+number of batches = 1500
+error patterns per batch = 100
+learning rate = 0.001
+
+training on random errors, weight from 2 to 3 
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+training on random errors, weight from 3 to 9 
+check symplectic ok
+% [[46,2]], 800 checks, 6 iter ,trained
+% collect 300 frame errors or 45000000 decoded error patterns
+% FE 332, total dec. 1330\\
+0.1 0.249624\\
+% FE 329, total dec. 1698\\
+0.09 0.193757\\
+% FE 317, total dec. 2564\\
+0.08 0.123635\\
+% FE 312, total dec. 3779\\
+0.07 0.0825615\\
+% FE 308, total dec. 5824\\
+0.06 0.0528846\\
+  weights saved to weights_cn.pt,weights_vn.pt, and weights_llr.pt.
+
+Training completed.
+
+Training and pruning completed.
+
