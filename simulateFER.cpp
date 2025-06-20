@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     double ep0 = 0.3;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
 		DecoderAttributes list(n, k, m, codeType, trained);
-		std::vector<std::string> decoder_names{"somePruned", "sisi", "notNeural"};
+		std::vector<std::string> decoder_names{"somePruned", "Pruned", "sisi", "notNeural"};
     fileReader matrix_supplier(n, k, m, codeType, trained);
     matrix_supplier.check_symplectic();
 
@@ -64,9 +64,16 @@ int main(int argc, char *argv[]) {
 #pragma omp parallel
         {
             while (failure <= max_frame_errors && total_decoding <= max_decoded_words) {
-                ensembleDecoder dude(decoder_names, list, epsilon, matrix_supplier);
                 std::vector<bool> success;
+        				if(decoder_names.size() == 1){
+                stabilizerCodes code(n, k, m, codeType, matrix_supplier, trained);
+                code.add_error_given_epsilon(epsilon);
+                success = code.decode(decIterNum, ep0);
+        				}
+        				else{
+                ensembleDecoder dude(decoder_names, list, epsilon, matrix_supplier);
         				success = dude.decodeAllPaths(decIterNum, ep0);
+        				}
 #pragma omp critical
                 {
                     if (!success[1])
