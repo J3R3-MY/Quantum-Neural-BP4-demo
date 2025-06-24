@@ -519,9 +519,15 @@ class NBP_oc(nn.Module):
         check_nodes = []
 
 
-        # print("++++++++++++++++++++++++++++++++++++++++++++")
-        # print("First iteration of weights_cn before pruning:")
-        # print(self.weights_cn[0])
+        print("++++++++++++++++++++++++++++++++++++++++++++")
+        print("First iteration of weights_cn before pruning:")
+        print(self.weights_cn[0])
+
+        # Count nonzero weights before pruning
+        pre_prune_counts = [torch.count_nonzero(t) for t in self.weights_cn]
+        pre_prune_total = sum([t.numel() for t in self.weights_cn])
+        pre_prune_zeros = [t.numel() - torch.count_nonzero(t) for t in self.weights_cn]
+        pre_prune_zero_total = sum(pre_prune_zeros)
 
         for idx, tensor in enumerate(self.weights_cn):
             dummy = nn.Module()
@@ -541,6 +547,12 @@ class NBP_oc(nn.Module):
             prune.remove(dummy, 'weight')
             self.weights_cn[idx] = dummy.weight.data
 
+          # Count zeros after pruning
+            post_prune_zeros = [self.weights_cn[i].numel() - torch.count_nonzero(self.weights_cn[i]) for i in range(len(self.weights_cn))]
+            post_prune_zero_total = sum(post_prune_zeros)
+            pruned_this_iter = post_prune_zero_total - pre_prune_zero_total
+
+        print(f"Number of weights pruned in this iteration: {pruned_this_iter} (total zeros after pruning: {post_prune_zero_total})")
 
         # print("############################################")
         # print("First iteration of weights_cn after pruning:")
@@ -554,9 +566,9 @@ class NBP_oc(nn.Module):
                 requires_grad=True
             )
 
-        # print("--------------------------------------------")
-        # print("First iteration of weights_cn after pruning and resetting:")
-        # print(self.weights_cn[0])
+        print("--------------------------------------------")
+        print("First iteration of weights_cn after pruning and resetting:")
+        print(self.weights_cn[0])
 
         self.save_weights()
 
@@ -733,24 +745,23 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
     return decoder
 
 # give parameters for the code and decoder
-trials = random.randint(1,3)
-percentage = random.uniform(0.01, 0.05)
+trials = [1, 2, 3, 4, 5, 6, 7]
+percentage = [0.02, 0.04, 0.08, 1.6, 3.2, 6.4, 12.8, 25.6, 51.2]
 
-specifier = f"{trials}_{percentage}"
-
-print(specifier)
-
-NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', name = specifier)
-
-for num in range(trials):
-    print("Here we go again...")
-    print(num)
-    NBP_decoder.prune_weights(percentage)
-    NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True, name = specifier)
+for num in trials:
+    for percent in percentage:
+        specifier = f"{num}_{percent}"
+        print(specifier)
+        NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', name = specifier)
+        for value in range(num):
+            print("Here we go again...")
+            print(num)
+            NBP_decoder.prune_weights(percent)
+            NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True, name = specifier)
 
 print("Training and pruning completed.\n")
 
 #call the executable build from the C++ script 'simulateFER.cpp' for evulation
 #in case of compatibility issue or wanting to try other codes, re-complie 'simulateFER.cpp' on local machine
-import subprocess
-subprocess.call(["./NBP_jupyter"])
+# import subprocess
+# subprocess.call(["./NBP_jupyter"])
