@@ -896,7 +896,7 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
             ep1+=0.06
 
         # number of updates
-        n_batches = 100
+        n_batches = 200
 
         #number of error patterns in each mini batch
         batch_size = 20*num_points

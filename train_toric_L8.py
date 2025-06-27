@@ -790,7 +790,7 @@ if m==3*n:
     ep1+=0.06
 
 # number of updates
-n_batches = 100
+n_batches = 200
 # number of error patterns in each mini batch
 batch_size = 20*num_points
 
