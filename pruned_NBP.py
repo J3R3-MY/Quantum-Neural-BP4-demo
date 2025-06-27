@@ -30,7 +30,10 @@ class NBP_oc(nn.Module):
         self.m = n - k
         self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) + "/"
         #If True, then all outgoing edges on the same CN has the same weight, configurable
-        self.one_weight_per_cn = True
+        if self.codeType == 'toric':
+            self.one_weight_per_cn = False
+        else:
+            self.one_weight_per_cn = True
         self.rate = self.k / self.n
         self.n_iterations = n_iterations
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -432,7 +435,6 @@ class NBP_oc(nn.Module):
 
 
     def ini_weight_as_one_toric(self, n_iterations: int):
-        """this function can be configured to determine which parameters are trainablecan be configured to determine which parameters are trainable"""
         """this function can be configured to determine which parameters are trainablecan be configured to determine which parameters are trainable"""
         self.weights_llr = []
         self.weights_cn = []
@@ -870,8 +872,6 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
     m2 = m // 2
 
     # give parameters for training
-    #learning rate
-    lr = 0.1
     #training for fixed epsilon_0
     ep0 = 0.1
     #train on errors of weight ranging from r1 to r2
@@ -885,13 +885,14 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
         #number of error patterns in each mini batch
         batch_size = 100
     elif(codeType == 'toric'):
+        lr = 1
         torch.autograd.set_detect_anomaly(True)
         m = 3*n  # number of checks, can also use 46 or 44
         ep1=0.03
         num_points = 6
         sep=0.01
         if m==3*n:
-            ep0 = 0.37
+            ep0 = 0.49
             ep1+=0.06
 
         # number of updates
@@ -911,7 +912,6 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
         optimizer = torch.optim.Adam(parameters, lr=lr)
 
     elif (codeType == 'toric'):
-
         optimizer = torch.optim.SGD([
             {'params': decoder.weights_llr, 'lr': lr},
             {'params': decoder.weights_vn,'lr': lr},
@@ -963,7 +963,7 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
     return decoder
 
 # give parameters for the code and decoder
-NBP_decoder = train_nbp_weights(128, 2, 128*3, 25, 'toric')
+NBP_decoder = train_nbp_weights(128, 2, 128*3, 18, 'toric')
 
 print("Training and pruning completed.\n")
 
