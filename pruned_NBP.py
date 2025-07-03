@@ -746,7 +746,7 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
 
 # give parameters for the code and decoder
 trials = [1, 2, 3, 4, 5, 6, 7]
-percentage = [0.02, 0.04, 0.08, 1.6, 3.2, 6.4, 12.8, 25.6, 51.2]
+percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 
 for num in trials:
     for percent in percentage:
