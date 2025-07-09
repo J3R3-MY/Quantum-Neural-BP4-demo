@@ -28,10 +28,28 @@ int main(int argc, char *argv[]) {
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
 		DecoderAttributes list(n, k, m, codeType, trained);
 		// std::vector<std::string> decoder_names{"sisi"};
-		std::vector<std::string> decoder_names{"one","nine", "eight", "seven", "six"};
-    fileReader matrix_supplier(n, k, m, codeType, trained);
+		std::vector<std::string> decoder_names{"six"};
+    fileReader matrix_supplier(n, k, m, codeType, trained, "sisi");
     matrix_supplier.check_symplectic();
 
+    fileReader matrix_six(n, k, m, codeType, trained, "six");
+    matrix_six.check_symplectic();
+
+    fileReader matrix_seven(n, k, m, codeType, trained, "seven");
+    matrix_seven.check_symplectic();
+
+    fileReader matrix_eight(n, k, m, codeType, trained, "eight");
+    matrix_eight.check_symplectic();
+
+    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "sisi");
+    matrix_supplier.check_symplectic();
+
+    fileReader matrix_nine(n, k, m, codeType, trained, "nine");
+    matrix_nine.check_symplectic();
+
+    fileReader matrix_one(n, k, m, codeType, trained, "one");
+    matrix_one.check_symplectic();
+  	
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
     //    double ep_list[] =
@@ -66,14 +84,39 @@ int main(int argc, char *argv[]) {
         {
             while (failure <= max_frame_errors && total_decoding <= max_decoded_words) {
                 std::vector<bool> success;
-        				if(decoder_names.size() == 1){
+                stabilizerCodes errorCreator(n, k, m, codeType, matrix_supplier_dummy, trained);
+          			errorCreator.add_error_given_epsilon(epsilon);
+
+        				if(false){
                 stabilizerCodes code(n, k, m, codeType, matrix_supplier, trained);
                 code.add_error_given_epsilon(epsilon);
                 success = code.decode(decIterNum, ep0);
         				}
         				else{
-                ensembleDecoder dude(decoder_names, list, epsilon, matrix_supplier);
-        				success = dude.decodeAllPaths(decIterNum, ep0);
+         				ensembleDecoder dude(decoder_names, list, epsilon, matrix_supplier);
+                stabilizerCodes six(n, k, m, codeType, matrix_six, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes seven(n, k, m, codeType, matrix_seven, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes eight(n, k, m, codeType, matrix_eight, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes nine(n, k, m, codeType, matrix_nine, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes one(n, k, m, codeType, matrix_one, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
+
+          			success = seven.decode(decIterNum, ep0);
+          			if (!success[1]) {
+									success = eight.decode(decIterNum, ep0);
+										if (!success[1]) {
+											success = six.decode(decIterNum, ep0);
+												if (!success[1]) {
+													success = sisi.decode(decIterNum, ep0);
+														if (!success[1]) {
+																success = nine.decode(decIterNum, ep0);
+																	if (!success[1]){
+																				success = one.decode(decIterNum, epsilon);
+																	}
+														}
+												}	
+											}
+										}
         				}
 #pragma omp critical
                 {

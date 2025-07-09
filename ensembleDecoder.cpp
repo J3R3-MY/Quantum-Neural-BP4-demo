@@ -5,7 +5,6 @@
 
 ensembleDecoder::ensembleDecoder(std::vector<std::string> decoder_names, DecoderAttributes list, double epsilon, fileReader& fileReader): 	
 	list_of_specifiers(decoder_names), list(list), main(list.n, list.m, list.k, list.codeType, fileReader, list.trained){
-	initalize_decoders(epsilon);
 };
 
 bool ensembleDecoder::updateGuess(const std::vector<unsigned>& candidate, int index) {
@@ -33,25 +32,31 @@ void ensembleDecoder::initalize_decoders(double epsilon){
 	}
 }
 
+void ensembleDecoder::add_decoder(stabilizerCodes decoder) {
+	// Add a new decoder to the list
+	list_of_decoders.push_back(decoder);
+}
+
 // This may be something that needs to happen in the main program
 std::vector<bool> ensembleDecoder::decodeAllPaths(unsigned int L, double epsilon){
 	std::vector<bool> success;
 	std::vector<bool> bestSuccess;
 
-	for (size_t i = 0; i < list_of_decoders.size(); ++i){
-		success = list_of_decoders[i].decode(L, epsilon);
+	// for (size_t i = 0; i < list_of_decoders.size(); ++i){
+		list_of_decoders[0].add_error_given_epsilon(epsilon);
+		success = list_of_decoders[0].decode(L, epsilon);
 		// Initalize error size, has to happen at runtime
-		if(i == 0){
-			std::vector<unsigned> initialGuess(list_of_decoders[i].getSyndrome().size(), 1);
-			estimatedError = initialGuess;
-			bestSuccess = success;
-		}
-		if(success[0]){
-			if(updateGuess(list_of_decoders[i].getErrorHat(), i)){
-				bestSuccess = success;
-			}
-		}
-	}
-	return bestSuccess;
+		// if(i == 0){
+		// 	std::vector<unsigned> initialGuess(list_of_decoders[i].getSyndrome().size(), 1);
+		// 	estimatedError = initialGuess;
+		// 	bestSuccess = success;
+		// }
+		// if(success[0]){
+		// 	if(updateGuess(list_of_decoders[i].getErrorHat(), i)){
+		// 		bestSuccess = success;
+		// 	}
+		// }
+	// }
+	
+	return success;
 }
-

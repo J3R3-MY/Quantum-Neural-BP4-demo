@@ -30,6 +30,7 @@ class ensembleDecoder{
 
 		std::vector<bool> decodeAllPaths(unsigned int L, double epsilon);
 		bool succesfully_decoded();
+		void add_decoder(stabilizerCodes decoder);
 
 	private:
 		std::vector<unsigned> estimatedError;
