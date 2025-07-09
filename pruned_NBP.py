@@ -365,37 +365,50 @@ class NBP_oc(nn.Module):
         self.H_reverse = 1 - self.H
 
     def ini_weight_as_one(self, n_iterations: int):
-        """this function can be configured to determine which parameters are trainablecan be configured to determine which parameters are trainable"""
-        self.weights_llr = []
-        self.weights_cn = []
-        self.weights_vn = []
+        """Initialize weights as learnable parameters, compatible with PyTorch pruning and optimizers."""
+        import torch.nn as nn
+
+        self.weights_llr = nn.ParameterList()
+        self.weights_cn = nn.ParameterList()
+        self.weights_vn = []  # If not trainable, leave as tensors
+
         for i in range(n_iterations):
             if self.one_weight_per_cn:
-                self.weights_cn.append(torch.ones((1, self.m_oc, 1), requires_grad=True, device=self.device))
+                cn_param = nn.Parameter(torch.ones((1, self.m_oc, 1), device=self.device))
             else:
-                self.weights_cn.append(torch.ones((1, self.m_oc, self.n), requires_grad=True, device=self.device))
-            self.weights_llr.append(torch.ones((1, 1, self.n), requires_grad=True, device=self.device))
-            self.weights_vn.append(torch.ones(1, self.m_oc, self.n, requires_grad=False, device=self.device))
-        self.weights_vn.append(torch.ones(1, self.m_oc, self.n, requires_grad=False, device=self.device))
-        self.weights_llr.append(torch.ones((1, 1, self.n), requires_grad=True, device=self.device))
+                cn_param = nn.Parameter(torch.ones((1, self.m_oc, self.n), device=self.device))
+            self.weights_cn.append(cn_param)
+
+            llr_param = nn.Parameter(torch.ones((1, 1, self.n), device=self.device))
+            self.weights_llr.append(llr_param)
+
+            self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))  # non-param
+
+        # One extra for llr and vn, as in your original code
+        self.weights_llr.append(nn.Parameter(torch.ones((1, 1, self.n), device=self.device)))
+        self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
+
+        # (If you want weights_vn to be trainable, use ParameterList as well)
 
 
     def load_weights(self, device: str):
         """
-        Load pretrained weights.Parameters directory : str directory where pretrained weights are stored as "weights_vn.pt", "weights_cn.pt" or "weights_llr.pt".
-        device : str cpu' or 'cuda'
+        Load pretrained weights. Parameters directory: str directory where pretrained weights are stored as "weights_vn.pt", "weights_cn.pt" or "weights_llr.pt".
+        device : str 'cpu' or 'cuda'
         """
         print('continue training with previous weights')
 
         if device == 'cpu':
-            weights_vn = torch.load(self.path + 'weights_vn.pt', map_location=torch.device('cpu'))
-            weights_cn = torch.load(self.path + 'weights_cn.pt', map_location=torch.device('cpu'))
-            weights_llr = torch.load(self.path + 'weights_llr.pt', map_location=torch.device('cpu'))
-
+            # Safe loading for ParameterList in PyTorch >=2.6:
+            with torch.serialization.safe_globals([torch.nn.modules.container.ParameterList]):
+                weights_vn = torch.load(self.path + 'weights_vn.pt', map_location=torch.device('cpu'))
+                weights_cn = torch.load(self.path + 'weights_cn.pt', map_location=torch.device('cpu'))
+                weights_llr = torch.load(self.path + 'weights_llr.pt', map_location=torch.device('cpu'))
         else:
-            weights_cn = torch.load(self.path + 'weights_cn.pt')
-            weights_vn = torch.load(self.path + 'weights_vn.pt')
-            weights_llr = torch.load(self.path + 'weights_llr.pt')
+            with torch.serialization.safe_globals([torch.nn.modules.container.ParameterList]):
+                weights_cn = torch.load(self.path + 'weights_cn.pt')
+                weights_vn = torch.load(self.path + 'weights_vn.pt')
+                weights_llr = torch.load(self.path + 'weights_llr.pt')
 
         self.weights_llr = weights_llr
         self.weights_cn = weights_cn
@@ -512,65 +525,21 @@ class NBP_oc(nn.Module):
 
     def prune_weights(self, amount=0.1):
         """
-        Prunes a specified percentage of the lowest-magnitude weights globally across all weights_cn tensors.
+        Prunes globally across all weights in self.weights_cn ParameterList.
+        PyTorch-idiomatic, no dummy modules.
         """
-        # Wrap each tensor as a parameter in a dummy module
-        dummy_modules = []
-        check_nodes = []
-
-
-        print("++++++++++++++++++++++++++++++++++++++++++++")
-        print("First iteration of weights_cn before pruning:")
-        print(self.weights_cn[0])
-
-        # Count nonzero weights before pruning
-        pre_prune_counts = [torch.count_nonzero(t) for t in self.weights_cn]
-        pre_prune_total = sum([t.numel() for t in self.weights_cn])
-        pre_prune_zeros = [t.numel() - torch.count_nonzero(t) for t in self.weights_cn]
-        pre_prune_zero_total = sum(pre_prune_zeros)
-
-        for idx, tensor in enumerate(self.weights_cn):
-            dummy = nn.Module()
-            dummy.weight = nn.Parameter(tensor.data.clone())  # clone to avoid in-place modification if needed
-            dummy_modules.append(dummy)
-            check_nodes.append((dummy, 'weight'))
-
+        parameters_to_prune = [(self.weights_cn, str(i)) for i in range(len(self.weights_cn))]
+        print("Before pruning:", self.weights_cn[0].data)
         prune.global_unstructured(
-            check_nodes,
+            parameters_to_prune,
             pruning_method=prune.L1Unstructured,
             amount=amount,
         )
+        print("After pruning:", self.weights_cn[0].data)
+        # If you want to make pruning permanent:
+        # for i in range(len(self.weights_cn)):
+        #     prune.remove(self.weights_cn, str(i))
 
-        # Overwrite back the pruned weights into self.weights_cn
-        for idx, dummy in enumerate(dummy_modules):
-            # Remove the pruning reparam to make pruning permanent
-            prune.remove(dummy, 'weight')
-            self.weights_cn[idx] = dummy.weight.data
-
-          # Count zeros after pruning
-            post_prune_zeros = [self.weights_cn[i].numel() - torch.count_nonzero(self.weights_cn[i]) for i in range(len(self.weights_cn))]
-            post_prune_zero_total = sum(post_prune_zeros)
-            pruned_this_iter = post_prune_zero_total - pre_prune_zero_total
-
-        print(f"Number of weights pruned in this iteration: {pruned_this_iter} (total zeros after pruning: {post_prune_zero_total})")
-
-        # print("############################################")
-        # print("First iteration of weights_cn after pruning:")
-        # print(self.weights_cn[0])
-
-        # Reset all unpruned weights to 1
-        for i, t in enumerate(self.weights_cn):
-            # Set pruned weights to 0, unpruned to 1, and make trainable
-            self.weights_cn[i] = nn.Parameter(
-                torch.where(t != 0, torch.tensor(1, dtype=t.dtype, device=t.device), t),
-                requires_grad=True
-            )
-
-        print("--------------------------------------------")
-        print("First iteration of weights_cn after pruning and resetting:")
-        print(self.weights_cn[0])
-
-        self.save_weights()
 
 #helper functions
 def readAlist(directory):
@@ -614,7 +583,7 @@ def optimization_step(decoder: NBP_oc, ep0, optimizer: torch.optim.Optimizer, er
    # delete old gradients.
    optimizer.zero_grad()
    # calculate gradient
-   loss.backward()
+   loss.backward(retain_graph=True)
    # update weights
    optimizer.step()
 
@@ -679,12 +648,8 @@ def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
                 errorz[b,p] = 1
     return errorx, errorz
 
-def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pretrained_weights:bool = False, name: str = "default"):
-    # give parameters for the code and decoder
-    m1 = m // 2
-    m2 = m // 2
+def train(NBP_dec:NBP_oc):
 
-    # give parameters for training
     #learning rate
     lr = 0.001
     #training for fixed epsilon_0
@@ -694,10 +659,57 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
     r2 = 3
     # number of updates
     n_batches = 1500
+
+    #trainable parameters
+    parameters = list(NBP_dec.weights_llr) + list(NBP_dec.weights_cn)
+    #use Adam
+    optimizer = torch.optim.Adam(NBP_dec.parameters(), lr=lr)
+
+    print('--- Training Metadata ---')
+    print(f'Code: n={NBP_dec.n}, k={NBP_dec.k}, PCM rows={NBP_dec.m1},{NBP_dec.m2}')
+    print(f'device: {NBP_dec.device}')
+    print(f'training ep0 = {ep0}')
+    print(f'Decoder: {NBP_dec.name}')
+    print(f'decoding iterations = {NBP_dec.n_iterations}')
+    print(f'number of batches = {n_batches}')
+    print(f'error patterns per batch = {NBP_dec.batch_size}')
+    print(f'learning rate = {lr}\n')
+
+    #pre-training stage, basically only the parameters for the first iteration is trained
+    loss_pre_train = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+    plot_loss(loss_pre_train, NBP_dec.path)
+
+
+    #continue to train with higher weight errors, mostly for the later iterations
+    r1 = 3
+    r2 = 9
+
+    n_batches = 600
+    loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+
+    plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
+
+def init_and_train(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pretrained_weights:bool = False, name: str = "default"):
+    # give parameters for the code and decoder
+    m1 = m // 2
+    m2 = m // 2
+
+
+    # # give parameters for training
     #number of error patterns in each mini batch
     batch_size = 100
-
-    # path where the training weights are stored, also supports training with previously stored weights
+    #
+    # #learning rate
+    # lr = 0.001
+    # #training for fixed epsilon_0
+    # ep0 = 0.1
+    # #train on errors of weight ranging from r1 to r2
+    # r1 = 2
+    # r2 = 3
+    # # number of updates
+    # n_batches = 10
+    #
+    # # path where the training weights are stored, also supports training with previously stored weights
     #initialize the decoder, all weights are set to 1
     decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, use_pretrained_weights, name, batch_size)
     # f = plt.figure(figsize=(5, 8))
@@ -713,51 +725,30 @@ def train_nbp_weights(n:int, k:int, m:int, n_iterations:int, codeType:str, use_p
     # plt.show()
     #
 
-    #trainable parameters
-    parameters = decoder.weights_llr + decoder.weights_cn
-    #use Adam
-    optimizer = torch.optim.Adam(parameters, lr=lr)
-
-    print('--- Training Metadata ---')
-    print(f'Code: n={decoder.n}, k={decoder.k}, PCM rows={decoder.m1},{decoder.m2}')
-    print(f'device: {decoder.device}')
-    print(f'training ep0 = {ep0}')
-    print(f'Decoder: {decoder.name}')
-    print(f'decoding iterations = {decoder.n_iterations}')
-    print(f'number of batches = {n_batches}')
-    print(f'error patterns per batch = {batch_size}')
-    print(f'learning rate = {lr}\n')
-
-    #pre-training stage, basically only the parameters for the first iteration is trained
-    loss_pre_train = training_loop(decoder, optimizer, r1, r2, ep0, n_batches, decoder.path)
-    plot_loss(loss_pre_train, decoder.path)
-
-
-    #continue to train with higher weight errors, mostly for the later iterations
-    r1 = 3
-    r2 = 9
-
-    n_batches = 600
-    loss = training_loop(decoder, optimizer, r1, r2, ep0, n_batches, decoder.path)
-
-    plot_loss(torch.cat((loss_pre_train, loss) , dim=0), decoder.path)
+    train(decoder)
 
     return decoder
 
 # give parameters for the code and decoder
 trials = [1, 2, 3, 4, 5, 6, 7]
-percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
+# percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
+percentage = [0.02, 0.04, 0.08, 0.16, 0.32]
 
 for num in trials:
     for percent in percentage:
         specifier = f"{num}_{percent}"
         print(specifier)
-        NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', name = specifier)
-        for value in range(num):
+        NBP_decoder = init_and_train(46, 2, 800, 6, 'GB', name = specifier)
+        for value in range(1, num+1):
             print("Here we go again...")
             print(num)
             NBP_decoder.prune_weights(percent)
-            NBP_decoder = train_nbp_weights(46, 2, 800, 6, 'GB', use_pretrained_weights=True, name = specifier)
+            train(NBP_decoder)
+
+
+# print(list(dec.named_parameters()))
+# print(list(dec.named_buffers()))
+
 
 print("Training and pruning completed.\n")
 
