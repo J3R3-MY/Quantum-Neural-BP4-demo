@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
                 success = code.decode(decIterNum, ep0);
         				}
         				else{
-         				ensembleDecoder dude(decoder_names, list, epsilon, matrix_supplier);
+         				ensembleDecoder dude(decoder_names, list, matrix_supplier);
                 stabilizerCodes six(n, k, m, codeType, matrix_six, trained, errorCreator.getErrorString(), errorCreator.getError());
                 stabilizerCodes seven(n, k, m, codeType, matrix_seven, trained, errorCreator.getErrorString(), errorCreator.getError());
                 stabilizerCodes eight(n, k, m, codeType, matrix_eight, trained, errorCreator.getErrorString(), errorCreator.getError());
@@ -101,22 +101,22 @@ int main(int argc, char *argv[]) {
                 stabilizerCodes one(n, k, m, codeType, matrix_one, trained, errorCreator.getErrorString(), errorCreator.getError());
                 stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
 
-          			success = seven.decode(decIterNum, ep0);
-          			if (!success[1]) {
-									success = eight.decode(decIterNum, ep0);
-										if (!success[1]) {
-											success = six.decode(decIterNum, ep0);
-												if (!success[1]) {
-													success = sisi.decode(decIterNum, ep0);
-														if (!success[1]) {
-																success = nine.decode(decIterNum, ep0);
-																	if (!success[1]){
-																				success = one.decode(decIterNum, epsilon);
-																	}
-														}
-												}	
-											}
-										}
+								dude.add_decoder(six);
+								dude.add_decoder(seven);
+								dude.add_decoder(eight);
+								dude.add_decoder(nine);
+								dude.add_decoder(one);
+								dude.add_decoder(sisi);
+								
+								success = dude.decodeAllPaths(decIterNum, ep0);
+
+								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
+								// 		success = dude.list_of_decoders[i].decode(decIterNum, ep0);
+								// 		if (success[1]) {
+								// 			break;
+								// 		}
+								// }
+          			
         				}
 #pragma omp critical
                 {

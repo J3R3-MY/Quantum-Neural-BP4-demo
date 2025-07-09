@@ -16,7 +16,7 @@ struct DecoderAttributes{
 
 class ensembleDecoder{
 	public:
-		ensembleDecoder(std::vector<std::string> decoder_names, DecoderAttributes list, double epsilon, fileReader& supplier);
+		ensembleDecoder(std::vector<std::string> decoder_names, DecoderAttributes list, fileReader& supplier);
 
 		std::vector<unsigned> returnGuess(){return estimatedError;};
 		bool updateGuess(const std::vector<unsigned>& newCandidate, int index);

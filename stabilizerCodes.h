@@ -30,6 +30,8 @@ class stabilizerCodes {
     static inline bool trace_inner_product(unsigned a, unsigned b);
 
     void add_error_given_epsilon(double epsilon);
+  	
+  	std::vector<double> Taus;
 
     // void add_error_given_positions(int pos[], int error[], int size);
 
@@ -48,7 +50,7 @@ class stabilizerCodes {
     const std::vector<unsigned>& getErrorHat() const{
     	return error_hat;
     }
-
+  	
     void setSyndrome(const std::vector<unsigned>& newSyn){
     	syn = newSyn;
     }
@@ -79,8 +81,6 @@ class stabilizerCodes {
     std::vector<std::vector<unsigned>> Mc;
     std::vector<std::vector<unsigned>> checkVal;
     std::vector<std::vector<unsigned>> varVal;
-
-  	std::vector<double> Taus;
 
     std::vector<std::vector<unsigned>> Nvk;
     std::vector<std::vector<unsigned>> Mck;
