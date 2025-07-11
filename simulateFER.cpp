@@ -27,29 +27,16 @@ int main(int argc, char *argv[]) {
     double ep0 = 0.3;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
 		DecoderAttributes list(n, k, m, codeType, trained);
-		// std::vector<std::string> decoder_names{"sisi"};
-		std::vector<std::string> decoder_names{"six"};
+		std::vector<std::string> decoder_names{"main"};
+
     fileReader matrix_supplier(n, k, m, codeType, trained, "sisi");
-    matrix_supplier.check_symplectic();
-
-    fileReader matrix_six(n, k, m, codeType, trained, "six");
-    matrix_six.check_symplectic();
-
-    fileReader matrix_seven(n, k, m, codeType, trained, "seven");
-    matrix_seven.check_symplectic();
-
-    fileReader matrix_eight(n, k, m, codeType, trained, "eight");
-    matrix_eight.check_symplectic();
-
     fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "sisi");
     matrix_supplier.check_symplectic();
 
-    fileReader matrix_nine(n, k, m, codeType, trained, "nine");
-    matrix_nine.check_symplectic();
+    fileReader matrix_dwa(n, k, m, codeType, trained, "dwa");
 
-    fileReader matrix_one(n, k, m, codeType, trained, "one");
-    matrix_one.check_symplectic();
-  	
+    fileReader matrix_jeden(n, k, m, codeType, trained, "jeden");
+
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
     //    double ep_list[] =
@@ -87,37 +74,26 @@ int main(int argc, char *argv[]) {
                 stabilizerCodes errorCreator(n, k, m, codeType, matrix_supplier_dummy, trained);
           			errorCreator.add_error_given_epsilon(epsilon);
 
-        				if(false){
-                stabilizerCodes code(n, k, m, codeType, matrix_supplier, trained);
-                code.add_error_given_epsilon(epsilon);
-                success = code.decode(decIterNum, ep0);
-        				}
-        				else{
          				ensembleDecoder dude(decoder_names, list, matrix_supplier);
-                stabilizerCodes six(n, k, m, codeType, matrix_six, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes seven(n, k, m, codeType, matrix_seven, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes eight(n, k, m, codeType, matrix_eight, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes nine(n, k, m, codeType, matrix_nine, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes one(n, k, m, codeType, matrix_one, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
 
-								dude.add_decoder(six);
-								dude.add_decoder(seven);
-								dude.add_decoder(eight);
-								dude.add_decoder(nine);
-								dude.add_decoder(one);
+                stabilizerCodes dwa(n, k, m, codeType, matrix_dwa, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes jeden(n, k, m, codeType, matrix_jeden, trained, errorCreator.getErrorString(), errorCreator.getError());
+
+
+                stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
+								dude.add_decoder(dwa);
+								dude.add_decoder(jeden);
 								dude.add_decoder(sisi);
 								
-								success = dude.decodeAllPaths(decIterNum, ep0);
+								// success = dude.decodeAllPaths(decIterNum, ep0);
 
-								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
-								// 		success = dude.list_of_decoders[i].decode(decIterNum, ep0);
-								// 		if (success[1]) {
-								// 			break;
-								// 		}
-								// }
-          			
-        				}
+								for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
+										success = dude.list_of_decoders[i].decode(decIterNum, ep0);
+										if (success[1]) {
+											break;
+										}
+								}
+        				
 #pragma omp critical
                 {
                     if (!success[1])
