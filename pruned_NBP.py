@@ -738,7 +738,7 @@ for num in trials:
     for percent in percentage:
         specifier = f"{num}_{percent}"
         print(specifier)
-        NBP_decoder = init_and_train(46, 2, 800, 6, 'GB', name = specifier)
+        NBP_decoder = init_and_train(48, 6, 2000, 6, 'GB', name = specifier)
         for value in range(1, num+1):
             print("Here we go again...")
             print(num)
