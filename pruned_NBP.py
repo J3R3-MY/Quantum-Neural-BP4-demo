@@ -590,10 +590,48 @@ def optimization_step(decoder: NBP_oc, ep0, optimizer: torch.optim.Optimizer, er
    return loss.detach()
 
 
+# def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0, num_batch, path):
+#     print(f'training on random errors, weight from {r1} to {r2} ')
+#     loss_length = num_batch
+#     loss = torch.zeros(loss_length)
+#
+#     idx = 0
+#     with tqdm(total=loss_length) as pbar:
+#         for i_batch in range(num_batch):
+#             errorx = torch.tensor([])
+#             errorz = torch.tensor([])
+#             for w in range(r1, r2):
+#                 ex, ez = addErrorGivenWeight(decoder.n, w, decoder.batch_size // (r2 - r1 + 1))
+#                 errorx = torch.cat((errorx, ex), dim=0)
+#                 errorz = torch.cat((errorz, ez), dim=0)
+#             res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
+#             ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+#             errorx = torch.cat((errorx, ex), dim=0)
+#             errorz = torch.cat((errorz, ez), dim=0)
+#
+#             loss[idx]= optimization_step(decoder, ep0, optimizer, errorx, errorz)
+#             pbar.update(1)
+#             pbar.set_description(f"loss {loss[idx]}")
+#             idx += 1
+#         decoder.save_weights()
+#
+#     print('Training completed.\n')
+#     return loss
+
 def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0, num_batch, path):
     print(f'training on random errors, weight from {r1} to {r2} ')
     loss_length = num_batch
     loss = torch.zeros(loss_length)
+
+    # ---- Set ONE of these flags to True for exclusive training ----
+    train_errorx_only = False  # Set to True for X errors only
+    train_errorz_only = False  # Set to True for Z errors only
+    # --------------------------------------------------------------
+
+    if (decoder.name == "X"):
+        train_errorx_only = True
+    if (decoder.name == "Z"):
+        train_errorz_only = True
 
     idx = 0
     with tqdm(total=loss_length) as pbar:
@@ -601,13 +639,32 @@ def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0
             errorx = torch.tensor([])
             errorz = torch.tensor([])
             for w in range(r1, r2):
-                ex, ez = addErrorGivenWeight(decoder.n, w, decoder.batch_size // (r2 - r1 + 1))
+                batch_subsize = decoder.batch_size // (r2 - r1 + 1)
+                if train_errorx_only:
+                    ex, _ = addErrorGivenWeight(decoder.n, w, batch_subsize)
+                    errorx = torch.cat((errorx, ex), dim=0)
+                    errorz = torch.cat((errorz, torch.zeros_like(ex)), dim=0)
+                elif train_errorz_only:
+                    _, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
+                    errorx = torch.cat((errorx, torch.zeros_like(ez)), dim=0)
+                    errorz = torch.cat((errorz, ez), dim=0)
+                else:
+                    ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
+                    errorx = torch.cat((errorx, ex), dim=0)
+                    errorz = torch.cat((errorz, ez), dim=0)
+            res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
+            if train_errorx_only:
+                ex, _ = addErrorGivenWeight(decoder.n, r2, res_size)
+                errorx = torch.cat((errorx, ex), dim=0)
+                errorz = torch.cat((errorz, torch.zeros_like(ex)), dim=0)
+            elif train_errorz_only:
+                _, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+                errorx = torch.cat((errorx, torch.zeros_like(ez)), dim=0)
+                errorz = torch.cat((errorz, ez), dim=0)
+            else:
+                ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
                 errorx = torch.cat((errorx, ex), dim=0)
                 errorz = torch.cat((errorz, ez), dim=0)
-            res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
-            ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
-            errorx = torch.cat((errorx, ex), dim=0)
-            errorz = torch.cat((errorz, ez), dim=0)
 
             loss[idx]= optimization_step(decoder, ep0, optimizer, errorx, errorz)
             pbar.update(1)
@@ -734,17 +791,24 @@ trials = [1, 2, 3, 4, 5, 6, 7]
 # percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 percentage = [0.02, 0.04, 0.08, 0.16, 0.32]
 
-for num in trials:
-    for percent in percentage:
-        specifier = f"{num}_{percent}"
-        print(specifier)
-        NBP_decoder = init_and_train(48, 6, 2000, 6, 'GB', name = specifier)
-        for value in range(1, num+1):
-            print("Here we go again...")
-            print(num)
-            NBP_decoder.prune_weights(percent)
-            train(NBP_decoder)
+# for num in trials:
+#     for percent in percentage:
+#         specifier = f"{num}_{percent}"
+#         print(specifier)
+#         NBP_decoder = init_and_train(48, 6, 2000, 6, 'GB', name = specifier)
+#         for value in range(1, num+1):
+#             print("Here we go again...")
+#             print(num)
+#             NBP_decoder.prune_weights(percent)
+#             train(NBP_decoder)
+#
 
+Mister_X = init_and_train(46, 2, 800, 6, 'GB', name = "X")
+# Mister_X.prune_weights(0.1)
+train(Mister_X)
+Mister_Z = init_and_train(46, 2, 800, 6, 'GB', name = "Z")
+# Mister_X.prune_weights(0.1)
+train(Mister_Z)
 
 # print(list(dec.named_parameters()))
 # print(list(dec.named_buffers()))
