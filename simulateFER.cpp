@@ -18,11 +18,11 @@
 #include <vector>
 
 int main(int argc, char *argv[]) {
-    unsigned n = 46;
-    unsigned k = 2;
-    unsigned m = 800;
+    unsigned n = 48;
+    unsigned k = 6;
+    unsigned m = 2000;
 
-    int decIterNum = 6;
+    int decIterNum = 3;
     bool trained = true;
     double ep0 = 0.3;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
@@ -33,9 +33,9 @@ int main(int argc, char *argv[]) {
     fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "sisi");
     matrix_supplier.check_symplectic();
 
-    fileReader matrix_dwa(n, k, m, codeType, trained, "dwa");
+    fileReader matrix_pruned1(n, k, m, codeType, trained, "Banks");
 
-    fileReader matrix_jeden(n, k, m, codeType, trained, "jeden");
+    // fileReader matrix_pruned2(n, k, m, codeType, trained, "Z");
 
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
@@ -76,23 +76,22 @@ int main(int argc, char *argv[]) {
 
          				ensembleDecoder dude(decoder_names, list, matrix_supplier);
 
-                stabilizerCodes dwa(n, k, m, codeType, matrix_dwa, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes jeden(n, k, m, codeType, matrix_jeden, trained, errorCreator.getErrorString(), errorCreator.getError());
+                // stabilizerCodes three_six(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
+                // stabilizerCodes jeden(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
 
 
                 stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
-								dude.add_decoder(dwa);
-								dude.add_decoder(jeden);
+								// dude.add_decoder(three_six);
 								dude.add_decoder(sisi);
 								
-								// success = dude.decodeAllPaths(decIterNum, ep0);
+								success = dude.decodeAllPaths(decIterNum, ep0);
 
-								for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
-										success = dude.list_of_decoders[i].decode(decIterNum, ep0);
-										if (success[1]) {
-											break;
-										}
-								}
+								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
+								// 		success = dude.list_of_decoders[i].decode(decIterNum, ep0);
+								// 		if (success[1]) {
+								// 			break;
+								// 		}
+								// }
         				
 #pragma omp critical
                 {
