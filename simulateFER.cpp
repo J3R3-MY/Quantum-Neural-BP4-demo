@@ -16,13 +16,13 @@
 #include <omp.h>
 
 int main(int argc, char *argv[]) {
-    unsigned n = 46;
-    unsigned k = 2;
-    unsigned m = 800;
+    unsigned n = 48;
+    unsigned k = 6;
+    unsigned m = 2000;
 
     int decIterNum = 6;
     bool trained = true;
-    double ep0 = 0.1;
+    double ep0 = 0.3;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
     fileReader matrix_supplier(n, k, m, codeType, trained);
     matrix_supplier.check_symplectic();
@@ -74,10 +74,10 @@ int main(int argc, char *argv[]) {
         }
         std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
         std::cout << epsilon << " " << (failure / total_decoding) << "\\\\" << std::endl;
-    		if (epsilon == 0.06){
-    			break;
-    			return 0;
-				}
+				// 		if (epsilon == 0.06){
+				// 			break;
+				// 			return 0;
+				// }
     }
     return 0;
 }
