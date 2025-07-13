@@ -22,20 +22,20 @@ int main(int argc, char *argv[]) {
     unsigned k = 6;
     unsigned m = 2000;
 
-    int decIterNum = 3;
+    int decIterNum = 6;
     bool trained = true;
     double ep0 = 0.3;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
 		DecoderAttributes list(n, k, m, codeType, trained);
 		std::vector<std::string> decoder_names{"main"};
 
-    fileReader matrix_supplier(n, k, m, codeType, trained, "sisi");
-    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "sisi");
+    fileReader matrix_supplier(n, k, m, codeType, trained, "Vanilla");
+    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "Vanilla");
     matrix_supplier.check_symplectic();
 
-    fileReader matrix_pruned1(n, k, m, codeType, trained, "Banks");
-
-    // fileReader matrix_pruned2(n, k, m, codeType, trained, "Z");
+    fileReader matrix_pruned1(n, k, m, codeType, trained, "notNeural");
+    fileReader matrix_pruned2(n, k, m, codeType, trained, "five-eight");
+    fileReader matrix_pruned3(n, k, m, codeType, trained, "six-four");
 
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
@@ -76,13 +76,18 @@ int main(int argc, char *argv[]) {
 
          				ensembleDecoder dude(decoder_names, list, matrix_supplier);
 
-                // stabilizerCodes three_six(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
-                // stabilizerCodes jeden(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes notNeural(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes five_eight(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
+
+                stabilizerCodes six_four(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
 
 
                 stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
-								// dude.add_decoder(three_six);
-								dude.add_decoder(sisi);
+								// dude.add_decoder(sisi);
+								dude.add_decoder(notNeural);
+								dude.add_decoder(five_eight);
+								dude.add_decoder(six_four);
+								// dude.add_decoder(sisi);
 								
 								success = dude.decodeAllPaths(decIterNum, ep0);
 
