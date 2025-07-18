@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.utils.prune as prune
 import numpy as np
 import os
+import subprocess
 from tqdm import tqdm
 import random
 import matplotlib.pylab as plt
@@ -16,7 +17,7 @@ class NBP_oc(nn.Module):
                  folder_weights: bool = False, name: str = "default",
                  batch_size: int = 1):
         super().__init__()
-        self.name = "Neural BP Decoder"
+        self.name = name
         self.batch_size = batch_size
         self.codeType = codeType
         self.n = n
@@ -27,10 +28,12 @@ class NBP_oc(nn.Module):
         self.m2 = m2
         #m is the number of rows of the full rank check matrix
         self.m = n - k
-        self.name = name
         self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) +"_" + str(self.name) + "/"
         #If True, then all outgoing edges on the same CN has the same weight, configurable
-        self.one_weight_per_cn = True
+        if self.codeType == 'toric':
+            self.one_weight_per_cn = False
+        else:
+            self.one_weight_per_cn = True
         self.rate = self.k / self.n
         self.n_iterations = n_iterations
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -41,8 +44,11 @@ class NBP_oc(nn.Module):
         self.load_matrices()
 
         if not folder_weights:
+            if self.codeType == 'toric':
+                self.ini_weight_as_one_toric(n_iterations)
             #initilize weights with 1 if none given
-            self.ini_weight_as_one(n_iterations)
+            else:
+                self.ini_weight_as_one(n_iterations)
         else:
             # load pretrained weights stored in directory "folder":
             self.load_weights(self.device)
@@ -199,7 +205,16 @@ class NBP_oc(nn.Module):
         outgoing_messages = (outgoing_messages * weights_cn).float()
         return outgoing_messages
 
-    def forward(self, errorx: torch.Tensor, errorz: torch.Tensor, ep: float, batch_size=1) -> torch.Tensor:
+    
+    def forward(self, errorx: torch.Tensor, errorz: torch.Tensor, ep: float, batch_size=1):
+        if self.codeType == 'GB':
+            return self._forward_gb(errorx, errorz, ep, batch_size)
+        elif self.codeType == 'toric':
+            return self._forward_toric(errorx, errorz, ep, batch_size)
+        else:
+            raise ValueError(f"Unknown codeType: {self.codeType}")
+
+    def _forward_gb(self, errorx: torch.Tensor, errorz: torch.Tensor, ep: float, batch_size=1):
         """main decoding procedure"""
         loss_array = torch.zeros(self.batch_size, self.n_iterations).float().to(self.device)
 
@@ -277,6 +292,77 @@ class NBP_oc(nn.Module):
         assert not torch.isnan(loss)
         assert not torch.isinf(loss)
         return loss
+
+
+    def _forward_toric(self, errorx: torch.Tensor, errorz: torch.Tensor, ep: float, batch_size=1):
+        """main decoding procedure for toric"""
+        loss_array = torch.zeros(self.batch_size, self.n_iterations).float().to(self.device)
+
+        assert batch_size == self.batch_size
+
+        self.errorx = errorx.to(self.device)
+        self.errorz = errorz.to(self.device)
+
+        self.qx = torch.zeros_like(self.errorx)
+        self.qz = torch.zeros_like(self.errorx)
+        self.qy = torch.zeros_like(self.errorx)
+        self.qi = torch.ones_like(self.errorx)
+
+        self.qx[self.errorx == 1] = 1
+        self.qx[self.errorz == 1] = 0
+
+        self.qz[self.errorz == 1] = 1
+        self.qz[self.errorx == 1] = 0
+
+        self.qy[self.errorz == 1] = 1
+        self.qy[self.errorx != self.errorz] = 0
+
+        self.qi[self.errorx == 1] = 0
+        self.qi[self.errorz == 1] = 0
+
+        self.syn = self.calculate_self_syn()
+
+        # initial LLR to, first equation in [1,Sec.II-C]
+        llr = np.log(3 * (1 - ep) / ep)
+
+        messages_cn_to_vn = torch.zeros((batch_size, self.m_oc, self.n)).to(self.device)
+        self.batch_size = batch_size
+
+        messages_vn_to_cn, _, _ = self.variable_node_update(messages_cn_to_vn, llr, self.weights_vn[0], self.weights_llr[0])
+
+        for i in range(self.n_iterations):
+            assert not torch.isnan(self.weights_llr[i]).any()
+            assert not torch.isnan(self.weights_cn[i]).any()
+            assert not torch.isnan(messages_cn_to_vn).any()
+            messages_cn_to_vn = self.check_node_update(messages_vn_to_cn, self.weights_cn[i])
+            assert not torch.isnan(messages_cn_to_vn).any()
+            assert not torch.isinf(messages_cn_to_vn).any()
+            messages_vn_to_cn, Tau, Tau_all = self.variable_node_update(messages_cn_to_vn, llr, self.weights_vn[i + 1], self.weights_llr[i + 1])
+            assert not torch.isnan(messages_vn_to_cn).any()
+            assert not torch.isinf(messages_vn_to_cn).any()
+            assert not torch.isnan(Tau).any()
+            assert not torch.isinf(Tau).any()
+            loss_array[:, i] = self.loss(Tau_all)
+
+        _, minIdx = torch.min(loss_array, dim=1, keepdim=False)
+
+        loss = torch.zeros(self.batch_size, ).float().to(self.device)
+        loss_min = torch.zeros(self.batch_size, ).float().to(self.device)
+        for b in range(batch_size):
+            # for idx in range(minIdx[b] + 1):
+            #     loss[b] += loss_array[b, idx]
+            # loss[b] /= (minIdx[b] + 1)
+            loss_min[b] = loss_array[b, minIdx[b]]
+            for idx in range(self.n_iterations):
+                loss[b] += loss_array[b, idx]
+            loss[b] /= self.n_iterations
+
+        loss = torch.sum(loss, dim=0) / self.batch_size
+        loss_min = torch.sum(loss_min, dim=0) / self.batch_size
+
+        assert not torch.isnan(loss)
+        assert not torch.isinf(loss)
+        return loss, loss_min
 
 
     def check_syndrome(self, Tau):
@@ -364,6 +450,57 @@ class NBP_oc(nn.Module):
         self.H = torch.cat((self.Hx, self.Hz), dim=1).float().to(self.device)
         self.H_reverse = 1 - self.H
 
+
+    def ini_weight_as_one_toric(self, n_iterations: int):
+        """this function can be configured to determine which parameters are trainable"""
+        import torch.nn as nn
+
+        self.weights_llr = nn.ParameterList()
+        self.weights_cn = nn.ParameterList()
+        self.weights_vn = []
+        if self.m_oc < self.n:
+            for i in range(n_iterations):
+                if self.one_weight_per_cn:
+                    cn_param = nn.Parameter(torch.ones((1, self.m_oc, 1), device=self.device))
+                else:
+                    cn_param = nn.Parameter(torch.ones((1, self.m_oc, self.n), device=self.device))
+                self.weights_cn.append(cn_param)
+
+                llr_param = nn.Parameter(torch.ones((1, 1, self.n), device=self.device))
+                self.weights_llr.append(llr_param)
+
+                # If you want the optimizer to see VN weights, they must also be nn.Parameter
+                self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))  # usually not param
+
+            # One extra for llr and vn as in the original code
+            self.weights_llr.append(nn.Parameter(torch.ones((1, 1, self.n), device=self.device)))
+            self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
+
+        else:
+            self.ini_weights = np.array([1.0, 0.1])
+            temp = torch.from_numpy(self.ini_weights[0] * np.ones((1, 1, self.n))).float().to(self.device)
+            l1 = (self.n) // 2
+            l2 = self.m_oc // 2 - l1
+
+            if self.one_weight_per_cn:
+                temp_vn = np.concatenate((np.ones((1, l1, 1)), self.ini_weights[1] * np.ones((1, l2, 1))), axis=1)
+            else:
+                temp_vn = np.concatenate(
+                    (np.ones((1, l1, self.n)),
+                     self.ini_weights[1] * np.ones((1, l2, self.n))), axis=1)
+            temp_vn = np.concatenate((temp_vn, temp_vn), axis=1)
+            temp_vn_tensor = torch.from_numpy(temp_vn).float().to(self.device)
+
+            for i in range(n_iterations):
+                self.weights_llr.append(nn.Parameter(temp.clone()))
+                self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
+                self.weights_cn.append(nn.Parameter(temp_vn_tensor.clone()))
+
+            self.weights_llr.append(nn.Parameter(temp.clone()))
+            self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
+        self.save_weights()
+
+        #TODO, make the same for toric
     def ini_weight_as_one(self, n_iterations: int):
         """Initialize weights as learnable parameters, compatible with PyTorch pruning and optimizers."""
         import torch.nn as nn
@@ -387,7 +524,6 @@ class NBP_oc(nn.Module):
         # One extra for llr and vn, as in your original code
         self.weights_llr.append(nn.Parameter(torch.ones((1, 1, self.n), device=self.device)))
         self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
-
 
 
     def load_weights(self, device: str):
@@ -538,7 +674,6 @@ class NBP_oc(nn.Module):
         # for i in range(len(self.weights_cn)):
         #     prune.remove(self.weights_cn, str(i))
 
-
 #helper functions
 def readAlist(directory):
     '''
@@ -588,33 +723,31 @@ def optimization_step(decoder: NBP_oc, ep0, optimizer: torch.optim.Optimizer, er
    return loss.detach()
 
 
-# def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0, num_batch, path):
-#     print(f'training on random errors, weight from {r1} to {r2} ')
-#     loss_length = num_batch
-#     loss = torch.zeros(loss_length)
-#
-#     idx = 0
-#     with tqdm(total=loss_length) as pbar:
-#         for i_batch in range(num_batch):
-#             errorx = torch.tensor([])
-#             errorz = torch.tensor([])
-#             for w in range(r1, r2):
-#                 ex, ez = addErrorGivenWeight(decoder.n, w, decoder.batch_size // (r2 - r1 + 1))
-#                 errorx = torch.cat((errorx, ex), dim=0)
-#                 errorz = torch.cat((errorz, ez), dim=0)
-#             res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
-#             ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
-#             errorx = torch.cat((errorx, ex), dim=0)
-#             errorz = torch.cat((errorz, ez), dim=0)
-#
-#             loss[idx]= optimization_step(decoder, ep0, optimizer, errorx, errorz)
-#             pbar.update(1)
-#             pbar.set_description(f"loss {loss[idx]}")
-#             idx += 1
-#         decoder.save_weights()
-#
-#     print('Training completed.\n')
-#     return loss
+def optimization_toric(decoder: NBP_oc, ep0, optimizer: torch.optim.Optimizer, errorx, errorz, scheduler=None):
+    # call the forward function
+    loss, loss_min = decoder(errorx, errorz, ep0, decoder.batch_size)
+
+    # delete old gradients.
+    optimizer.zero_grad()
+    # calculate gradient
+    loss_min.backward(retain_graph=True)
+    clip_value = 0.001
+    for p in range(decoder.n_iterations):
+        # Only clamp if grad exists
+        if decoder.weights_vn[p].grad is not None:
+            decoder.weights_vn[p].grad.data.clamp_(-clip_value, clip_value)
+        if decoder.weights_cn[p].grad is not None:
+            decoder.weights_cn[p].grad.data.clamp_(-clip_value, clip_value)
+        if decoder.weights_llr[p].grad is not None:
+            decoder.weights_llr[p].grad.data.clamp_(-clip_value, clip_value)
+    #
+
+    # update weights
+    optimizer.step()
+    scheduler.step()
+
+    return loss.detach(), loss_min.detach()
+
 
 def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0, num_batch, path):
     print(f'training on random errors, weight from {r1} to {r2} ')
@@ -673,6 +806,140 @@ def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0
     print('Training completed.\n')
     return loss
 
+def addDeploarizationErrorGiveEp(n: int, ep:float, batch_size:int = 1):
+    errorx = torch.zeros((batch_size, n))
+    errorz = torch.ones((batch_size, n))
+    np.random.seed()
+    for b in range(batch_size):
+        a = torch.from_numpy(np.random.rand(n,))
+        # iny = (a <= ep / 3).reshape(n,)
+        errorx[b, (a <= 2.0 * ep / 3.0)] = 1
+        errorz[b, (a < ep / 3.0)] = 0
+        errorz[b, (a > ep)] = 0
+    return errorx, errorz
+
+def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_batch, path, scheduler=None):
+    print(f'training on random errors, epsilon from {ep1} to {ep1+sep*(num_points-1)} ')
+    loss_length = num_batch
+    loss = torch.zeros(loss_length)
+    loss_min = torch.zeros(loss_length)
+
+    idx = 0
+    with tqdm(total=loss_length) as pbar:
+        for i_batch in range(num_batch):
+            errorx = torch.tensor([])
+            errorz = torch.tensor([])
+            for i in range(num_points):
+                ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1+i*sep, decoder.batch_size//num_points)
+                errorx = torch.cat((errorx, ex), dim=0)
+                errorz = torch.cat((errorz, ez), dim=0)
+
+
+            loss[idx], loss_min[idx] = optimization_toric(decoder, ep0, optimizer, errorx, errorz, scheduler)
+            pbar.update(1)
+            lrs = scheduler.get_last_lr()
+            lr_str = ", ".join(f"{lr:.2f}" for lr in lrs)
+            pbar.set_description(f"loss {loss[idx]:.2f}, loss min {loss_min[idx]:.2f}, lr(s): {lr_str}")
+            idx += 1
+
+
+            if ((i_batch+1)%100==0):
+                decoder.save_weights()
+                plot_loss(loss_min[0:idx-1], path=None)
+
+    decoder.save_weights()
+    print('Training completed.\n')
+    return loss_min
+
+def train(NBP_dec:NBP_oc):
+
+    if(NBP_dec.codeType == 'GB'):
+        lr = 0.001
+        r1 = 2
+        r2 = 3
+        ep0 = 0.1
+        # number of updates
+        n_batches = 1500
+    elif(NBP_dec.codeType == 'toric'):
+        lr = 1
+        torch.autograd.set_detect_anomaly(True)
+        m = 3*NBP_dec.n  # number of checks, can also use 46 or 44
+        ep1=0.03
+        sep=0.01
+        num_points = 6
+        if m==3*NBP_dec.n:
+            ep0 = 0.37
+            ep1+=0.06
+
+        # number of updates
+        n_batches = 200
+
+
+    #trainable parameters
+    # parameters = list(NBP_dec.weights_llr) + list(NBP_dec.weights_cn)
+    optimizer = torch.optim.Adam(NBP_dec.parameters(), lr=lr)
+    if(NBP_dec.codeType == 'toric'):
+        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=1.0, end_factor=0.1, total_iters=1200)
+        # could also use Adam, not making too much difference
+        # optimizer = torch.optim.Adam(parameters, lr=lr)
+
+    print('--- Training Metadata ---')
+    print(f'Code: n={NBP_dec.n}, k={NBP_dec.k}, PCM rows={NBP_dec.m1},{NBP_dec.m2}')
+    print(f'device: {NBP_dec.device}')
+    print(f'training ep0 = {ep0}')
+    print(f'Decoder: {NBP_dec.name}')
+    print(f'decoding iterations = {NBP_dec.n_iterations}')
+    print(f'number of batches = {n_batches}')
+    print(f'error patterns per batch = {NBP_dec.batch_size}')
+    print(f'learning rate = {lr}\n')
+
+    if (NBP_dec.codeType == 'GB'): 
+        #pre-training stage, basically only the parameters for the first iteration is trained
+        loss_pre_train = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+        plot_loss(loss_pre_train, NBP_dec.path)
+
+
+        #continue to train with higher weight errors, mostly for the later iterations
+        r1 = 3
+        r2 = 9
+
+        n_batches = 600
+        loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+
+        plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
+
+
+
+    elif (NBP_dec.codeType == 'toric'):
+        # training stage
+        loss = torch.Tensor()
+        print("Plotting loss...")
+        loss_pre_train = training_toric(NBP_dec, optimizer, ep1, sep,num_points, ep0, n_batches, NBP_dec.path, scheduler=scheduler)
+        loss = torch.cat((loss, loss_pre_train), dim=0)
+        plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
+        plot_loss(loss_pre_train, NBP_dec.path)
+
+
+def init_and_train(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pretrained_weights:bool = False, name: str = "default"):
+    # give parameters for the code and decoder
+    m1 = m // 2
+    m2 = m // 2
+
+    if(codeType == 'GB'):
+        #number of error patterns in each mini batch
+        batch_size = 100
+    elif(codeType == 'toric'):
+        #number of error patterns in each mini batch
+        num_points = 6
+        batch_size = 20*num_points
+
+
+    decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, use_pretrained_weights, name, batch_size)
+
+    train(decoder)
+
+    return decoder
+
 def plot_loss(loss, path, myrange = 0):
     f = plt.figure(figsize=(8, 5))
     if myrange>0:
@@ -680,11 +947,9 @@ def plot_loss(loss, path, myrange = 0):
     else:
         plt.plot(range(1, loss.size(dim=0)+1),loss,marker='.')
     plt.show()
-    file_name = path + "loss.pdf"
+    file_name = str(path) + "loss.pdf"
     f.savefig(file_name)
     plt.close()
-
-
 
 def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
     errorx = torch.zeros((batch_size, n))
@@ -703,118 +968,25 @@ def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
                 errorz[b,p] = 1
     return errorx, errorz
 
-def train(NBP_dec:NBP_oc):
 
-    #learning rate
-    lr = 0.001
-    #training for fixed epsilon_0
-    ep0 = 0.1
-    #train on errors of weight ranging from r1 to r2
-    r1 = 2
-    r2 = 3
-    # number of updates
-    n_batches = 1500
+# give parameters for the code and decoder
 
-    #trainable parameters
-    parameters = list(NBP_dec.weights_llr) + list(NBP_dec.weights_cn)
-    #use Adam
-    optimizer = torch.optim.Adam(NBP_dec.parameters(), lr=lr)
-
-    print('--- Training Metadata ---')
-    print(f'Code: n={NBP_dec.n}, k={NBP_dec.k}, PCM rows={NBP_dec.m1},{NBP_dec.m2}')
-    print(f'device: {NBP_dec.device}')
-    print(f'training ep0 = {ep0}')
-    print(f'Decoder: {NBP_dec.name}')
-    print(f'decoding iterations = {NBP_dec.n_iterations}')
-    print(f'number of batches = {n_batches}')
-    print(f'error patterns per batch = {NBP_dec.batch_size}')
-    print(f'learning rate = {lr}\n')
-
-    #pre-training stage, basically only the parameters for the first iteration is trained
-    loss_pre_train = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
-    plot_loss(loss_pre_train, NBP_dec.path)
-
-
-    #continue to train with higher weight errors, mostly for the later iterations
-    r1 = 3
-    r2 = 9
-
-    n_batches = 600
-    loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
-
-    plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
-
-def init_and_train(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pretrained_weights:bool = False, name: str = "default"):
-    # give parameters for the code and decoder
-    m1 = m // 2
-    m2 = m // 2
-
-
-    # # give parameters for training
-    #number of error patterns in each mini batch
-    batch_size = 100
-    #
-    # #learning rate
-    # lr = 0.001
-    # #training for fixed epsilon_0
-    # ep0 = 0.1
-    # #train on errors of weight ranging from r1 to r2
-    # r1 = 2
-    # r2 = 3
-    # # number of updates
-    # n_batches = 10
-    #
-    # # path where the training weights are stored, also supports training with previously stored weights
-    #initialize the decoder, all weights are set to 1
-    decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, use_pretrained_weights, name, batch_size)
-    # f = plt.figure(figsize=(5, 8))
-    # plt.spy(decoder.H[0].detach().cpu().numpy(), markersize=1, aspect='auto')
-    # plt.title("check matrix of the [["+str(n)+","+str(k)+"]] code with "+str(m)+" checks")
-    # plt.show()
-
-    #for comparision, also plot the original check matrix
-    # decoder_2 = NBP_oc(n, k, n-k, m1,m2, codeType, n_iterations, batch_size=batch_size, folder_weights=None)
-    # f = plt.figure(figsize=(5, 3))
-    # plt.spy(decoder_2.H[0].detach().cpu().numpy(), markersize=1, aspect='auto')
-    # plt.title("check matrix of the [["+str(n)+","+str(k)+"]] code with "+str(n-k)+" checks")
-    # plt.show()
-    #
-
-    train(decoder)
-
-    return decoder
 
 # give parameters for the code and decoder
 trials = [1, 2, 3, 4, 5, 6, 7]
-# percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
-percentage = [0.02, 0.04, 0.08, 0.16, 0.32]
+percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
+# percentage = [0.02, 0.04, 0.08, 0.16, 0.32]
 
-# for num in trials:
-#     for percent in percentage:
-#         specifier = f"{num}_{percent}"
-#         print(specifier)
-#         NBP_decoder = init_and_train(48, 6, 2000, 6, 'GB', name = specifier)
-#         for value in range(1, num+1):
-#             print("Here we go again...")
-#             print(num)
-#             NBP_decoder.prune_weights(percent)
-#             train(NBP_decoder)
-#
-
-Mister_X = init_and_train(46, 2, 800, 6, 'GB', name = "X")
-# Mister_X.prune_weights(0.1)
-train(Mister_X)
-Mister_Z = init_and_train(46, 2, 800, 6, 'GB', name = "Z")
-# Mister_X.prune_weights(0.1)
-train(Mister_Z)
-
-# print(list(dec.named_parameters()))
-# print(list(dec.named_buffers()))
-
+for num in trials:
+    for percent in percentage:
+        specifier = f"{num}_{percent}"
+        print(specifier)
+        NBP_decoder = init_and_train(128, 2, 384, 18, 'toric', name = specifier)
+        for value in range(1, num+1):
+            print("Here we go again...")
+            print(num)
+            NBP_decoder.prune_weights(percent)
+            train(NBP_decoder)
 
 print("Training and pruning completed.\n")
 
-#call the executable build from the C++ script 'simulateFER.cpp' for evulation
-#in case of compatibility issue or wanting to try other codes, re-complie 'simulateFER.cpp' on local machine
-# import subprocess
-# subprocess.call(["./NBP_jupyter"])
