@@ -832,9 +832,11 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
                 errorz = torch.cat((errorz, ez), dim=0)
 
 
-            loss[idx], loss_min[idx] = optimization_toric(decoder, ep0, optimizer, errorx, errorz,scheduler)
+            loss[idx], loss_min[idx] = optimization_toric(decoder, ep0, optimizer, errorx, errorz, scheduler)
             pbar.update(1)
-            pbar.set_description(f"loss {loss[idx]:.2f}, loss min {loss_min[idx]:.2f}, lr {scheduler.get_last_lr()[1]:.2f}")
+            lrs = scheduler.get_last_lr()
+            lr_str = ", ".join(f"{lr:.2f}" for lr in lrs)
+            pbar.set_description(f"loss {loss[idx]:.2f}, loss min {loss_min[idx]:.2f}, lr(s): {lr_str}")
             idx += 1
 
 
