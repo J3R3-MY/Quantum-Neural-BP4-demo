@@ -869,7 +869,7 @@ def train(NBP_dec:NBP_oc):
         num_points = 6
         if m==3*NBP_dec.n:
             ep0 = 0.37
-            ep1+=0.06
+            ep1=0.06
 
         # number of updates
         n_batches = 200
