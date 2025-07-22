@@ -452,29 +452,33 @@ class NBP_oc(nn.Module):
 
 
     def ini_weight_as_one_toric(self, n_iterations: int):
-        """this function can be configured to determine which parameters are trainable"""
+        """Initialize weights as trainable nn.Parameter, including VN weights."""
+
         import torch.nn as nn
 
         self.weights_llr = nn.ParameterList()
         self.weights_cn = nn.ParameterList()
-        self.weights_vn = []
+        self.weights_vn = nn.ParameterList()
+
         if self.m_oc < self.n:
             for i in range(n_iterations):
+                # CN weights
                 if self.one_weight_per_cn:
                     cn_param = nn.Parameter(torch.ones((1, self.m_oc, 1), device=self.device))
                 else:
                     cn_param = nn.Parameter(torch.ones((1, self.m_oc, self.n), device=self.device))
                 self.weights_cn.append(cn_param)
 
+                # LLR weights
                 llr_param = nn.Parameter(torch.ones((1, 1, self.n), device=self.device))
                 self.weights_llr.append(llr_param)
 
-                # If you want the optimizer to see VN weights, they must also be nn.Parameter
-                self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))  # usually not param
+                # VN weights
+                vn_param = nn.Parameter(torch.ones((1, self.m_oc, self.n), device=self.device))
+                self.weights_vn.append(vn_param)
 
-            # One extra for llr and vn as in the original code
             self.weights_llr.append(nn.Parameter(torch.ones((1, 1, self.n), device=self.device)))
-            self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
+            self.weights_vn.append(nn.Parameter(torch.ones((1, self.m_oc, self.n), device=self.device)))
 
         else:
             self.ini_weights = np.array([1.0, 0.1])
@@ -493,11 +497,12 @@ class NBP_oc(nn.Module):
 
             for i in range(n_iterations):
                 self.weights_llr.append(nn.Parameter(temp.clone()))
-                self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
                 self.weights_cn.append(nn.Parameter(temp_vn_tensor.clone()))
+                self.weights_vn.append(nn.Parameter(torch.ones(1, self.m_oc, self.n, device=self.device)))
 
             self.weights_llr.append(nn.Parameter(temp.clone()))
-            self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
+            self.weights_vn.append(nn.Parameter(torch.ones(1, self.m_oc, self.n, device=self.device)))
+
         self.save_weights()
 
         #TODO, make the same for toric
