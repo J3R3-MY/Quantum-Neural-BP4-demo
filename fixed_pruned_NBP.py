@@ -873,7 +873,7 @@ def train(NBP_dec:NBP_oc):
         sep=0.01
         num_points = 6
         if m==3*NBP_dec.n:
-            ep0 = 0.37
+            ep0 = 0.49
             ep1=0.06
 
         # number of updates
@@ -881,13 +881,14 @@ def train(NBP_dec:NBP_oc):
 
 
     #trainable parameters
-    # parameters = list(NBP_dec.weights_llr) + list(NBP_dec.weights_cn)
-    optimizer = torch.optim.Adam(NBP_dec.parameters(), lr=lr)
+    if(NBP_dec.codeType == 'GB'):
+        optimizer = torch.optim.Adam(NBP_dec.parameters(), lr=lr)
     if(NBP_dec.codeType == 'toric'):
+        optimizer = torch.optim.SGD(
+            NBP_dec.parameters(),
+            lr=lr
+        )
         scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=1.0, end_factor=0.1, total_iters=1200)
-        # could also use Adam, not making too much difference
-        # optimizer = torch.optim.Adam(parameters, lr=lr)
-
     print('--- Training Metadata ---')
     print(f'Code: n={NBP_dec.n}, k={NBP_dec.k}, PCM rows={NBP_dec.m1},{NBP_dec.m2}')
     print(f'device: {NBP_dec.device}')
@@ -982,16 +983,20 @@ trials = [1, 2, 3, 4, 5, 6, 7]
 percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 # percentage = [0.02, 0.04, 0.08, 0.16, 0.32]
 
-for num in trials:
-    for percent in percentage:
-        specifier = f"{num}_{percent}"
-        print(specifier)
-        NBP_decoder = init_and_train(128, 2, 384, 18, 'toric', name = specifier)
-        for value in range(1, num+1):
-            print("Here we go again...")
-            print(num)
-            NBP_decoder.prune_weights(percent)
-            train(NBP_decoder)
+# for num in trials:
+#     for percent in percentage:
+#         specifier = f"{num}_{percent}"
+#         print(specifier)
+#         NBP_decoder = init_and_train(128, 2, 384, 18, 'toric', name = specifier)
+#         for value in range(1, num+1):
+#             print("Here we go again...")
+#             print(num)
+#             NBP_decoder.prune_weights(percent)
+#             train(NBP_decoder)
+
+
+NBP_decoder = init_and_train(128, 2, 384, 18, 'toric', name = "SGD")
+NBP_decoder.prune_weights(0.5)
 
 print("Training and pruning completed.\n")
 

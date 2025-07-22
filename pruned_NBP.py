@@ -384,7 +384,6 @@ class NBP_oc(nn.Module):
 
             self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))  # non-param
 
-        # One extra for llr and vn, as in your original code
         self.weights_llr.append(nn.Parameter(torch.ones((1, 1, self.n), device=self.device)))
         self.weights_vn.append(torch.ones(1, self.m_oc, self.n, device=self.device))
 
