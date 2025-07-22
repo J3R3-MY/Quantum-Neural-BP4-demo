@@ -18,24 +18,24 @@
 #include <vector>
 
 int main(int argc, char *argv[]) {
-    unsigned n = 46;
-    unsigned k = 2;
-    unsigned m = 800;
+    unsigned n = 48;
+    unsigned k = 6;
+    unsigned m = 2000;
 
     int decIterNum = 6;
     bool trained = true;
     double ep0 = 0.3;
     stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
-		DecoderAttributes list(n, k, m, codeType, trained);
+		AttributesDecoder list(n, k, m, codeType, trained);
 		std::vector<std::string> decoder_names{"main"};
 
     fileReader matrix_supplier(n, k, m, codeType, trained, "Vanilla");
     fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "Vanilla");
     matrix_supplier.check_symplectic();
 
-    // fileReader matrix_pruned1(n, k, m, codeType, trained, "notNeural");
-    fileReader matrix_pruned2(n, k, m, codeType, trained, "five-eight");
-    fileReader matrix_pruned3(n, k, m, codeType, trained, "six-four");
+    fileReader matrix_pruned1(n, k, m, codeType, trained, "Tick");
+    fileReader matrix_pruned2(n, k, m, codeType, trained, "Trick");
+    fileReader matrix_pruned3(n, k, m, codeType, trained, "Track");
 
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
@@ -76,18 +76,16 @@ int main(int argc, char *argv[]) {
 
          				ensembleDecoder dude(decoder_names, list, matrix_supplier);
 
-                // stabilizerCodes notNeural(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes five_eight(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
 
-                stabilizerCodes six_four(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
-
+                stabilizerCodes Tick(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes Trick(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes Track(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
 
                 stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
 								// dude.add_decoder(sisi);
-								// dude.add_decoder(notNeural);
-								dude.add_decoder(five_eight);
-								// dude.add_decoder(six_four);
-								// dude.add_decoder(sisi);
+								dude.add_decoder(Tick);
+								// dude.add_decoder(Trick);
+								// dude.add_decoder(Track);
 								
 								success = dude.decodeAllPaths(decIterNum, ep0);
 
@@ -100,14 +98,26 @@ int main(int argc, char *argv[]) {
         				
 #pragma omp critical
                 {
-                    if (!success[1])
-                        failure += 1;
-                    total_decoding += 1;
-                }
+									if (!success[1]) {
+											// Print each string in the error string vector, separated by spaces
+											const auto& errorStrings = dude.list_of_decoders[0].getErrorString();
+											for (const auto& s : errorStrings) {
+													std::cout << s << " ";
+											}
+											std::cout << epsilon << std::endl;
+
+											failure += 1;
+									}
+									total_decoding += 1;
+											}
             }
         }
         std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
         std::cout << epsilon << " " << (failure / total_decoding) << "\\\\" << std::endl;
+    		if (epsilon == 0.06){
+    			break;
+    			return 0;
+				}
     }
     return 0;
 }

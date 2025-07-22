@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <iostream>
 
-ensembleDecoder::ensembleDecoder(std::vector<std::string> decoder_names, DecoderAttributes list, fileReader& fileReader): 	
+ensembleDecoder::ensembleDecoder(std::vector<std::string> decoder_names, AttributesDecoder list, fileReader& fileReader): 	
 	list_of_specifiers(decoder_names), list(list), main(list.n, list.m, list.k, list.codeType, fileReader, list.trained){
 	list_of_decoders.clear();
 };
