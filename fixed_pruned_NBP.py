@@ -865,7 +865,7 @@ def train(NBP_dec:NBP_oc):
         r2 = 3
         ep0 = 0.1
         # number of updates
-        n_batches = 1500
+        n_batches = 500
     elif(NBP_dec.codeType == 'toric'):
         lr = 1
         torch.autograd.set_detect_anomaly(True)
@@ -910,7 +910,7 @@ def train(NBP_dec:NBP_oc):
         r1 = 3
         r2 = 9
 
-        n_batches = 600
+        n_batches = 200
         loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
 
         plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
@@ -1028,9 +1028,9 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 
 Tick = init_and_train(48, 6, 2000, 6, 'GB', name="Tick")
 
-# Trick = init_and_train(48, 6, 2000, 6, 'GB', name="Trick")
-#
-# Track = init_and_train(48, 6, 2000, 6, 'GB', name="Track")
+Trick = init_and_train(48, 6, 2000, 6, 'GB', name="Trick")
+
+Track = init_and_train(48, 6, 2000, 6, 'GB', name="Track")
 
 print("Training and pruning completed.\n")
 
