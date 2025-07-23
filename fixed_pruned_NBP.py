@@ -30,7 +30,7 @@ class NBP_oc(nn.Module):
         self.m = n - k
         self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) +"_" + str(self.name) + "/"
         #If True, then all outgoing edges on the same CN has the same weight, configurable
-        if self.codeType == 'toric':
+        if self.name == 'NoWS':
             self.one_weight_per_cn = False
         else:
             self.one_weight_per_cn = True
@@ -46,7 +46,6 @@ class NBP_oc(nn.Module):
         if not folder_weights:
             if self.codeType == 'toric':
                 self.ini_weight_as_one_toric(n_iterations)
-            #initilize weights with 1 if none given
             else:
                 self.ini_weight_as_one(n_iterations)
         else:
@@ -668,16 +667,18 @@ class NBP_oc(nn.Module):
         Prunes globally across all weights in self.weights_cn ParameterList.
         """
         parameters_to_prune = [(self.weights_cn, str(i)) for i in range(len(self.weights_cn))]
-        print("Before pruning:", self.weights_cn[0].data)
+        # print("Before pruning:", self.weights_cn[0].data)
         prune.global_unstructured(
             parameters_to_prune,
             pruning_method=prune.L1Unstructured,
             amount=amount,
         )
-        print("After pruning:", self.weights_cn[0].data)
-        # If you want to make pruning permanent:
-        # for i in range(len(self.weights_cn)):
-        #     prune.remove(self.weights_cn, str(i))
+        # print("After pruning:", self.weights_cn[0].data)
+
+        print(type(self.weights_cn))
+        print([type(p) for p in self.weights_cn])
+
+        self.save_weights()
 
 #helper functions
 def readAlist(directory):
@@ -995,8 +996,11 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             train(NBP_decoder)
 
 
-NBP_decoder = init_and_train(128, 2, 384, 18, 'toric', name = "SGD")
-NBP_decoder.prune_weights(0.5)
+NBP_decoder = init_and_train(128, 2, 384, 18, 'toric', name = "WS")
+train(NBP_decoder)
+
+NBP_dec = init_and_train(128, 2, 384, 18, 'toric', name = "NoWS")
+train(NBP_dec)
 
 print("Training and pruning completed.\n")
 
