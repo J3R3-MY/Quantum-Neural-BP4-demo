@@ -975,8 +975,39 @@ def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
                 errorz[b,p] = 1
     return errorx, errorz
 
-
-# give parameters for the code and decoder
+def addErrorfromEnsemble(n: int, txt_path: str, batch_size: int = 1):
+    """
+    Reads a .txt file with error patterns (e.g., 'Y0 X5 Z9 ...') and returns errorx/errorz arrays.
+    """
+    errorx = torch.zeros((batch_size, n))
+    errorz = torch.zeros((batch_size, n))
+    # Read lines from the file
+    with open(txt_path, 'r') as f:
+        lines = f.readlines()
+    for b in range(batch_size):
+        if b >= len(lines):
+            break  # Don't overrun the available patterns
+        line = lines[b].strip()
+        if not line:
+            continue  # skip empty lines
+        tokens = line.split()
+        for token in tokens:
+            if token[0] not in 'XYZxyz':
+                continue  # skip tokens that aren't error labels
+            try:
+                pos = int(token[1:])
+            except ValueError:
+                continue  # skip if not a valid integer after X/Y/Z
+            if pos < 0 or pos >= n:
+                continue  # skip out-of-bounds
+            if token[0] in 'Xx':
+                errorx[b, pos] = 1
+            if token[0] in 'Zz':
+                errorz[b, pos] = 1
+            if token[0] in 'Yy':
+                errorx[b, pos] = 1
+                errorz[b, pos] = 1
+    return errorx, errorz
 
 
 # give parameters for the code and decoder
@@ -995,12 +1026,11 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             NBP_decoder.prune_weights(percent)
 #             train(NBP_decoder)
 
+Tick = init_and_train(48, 6, 2000, 6, 'GB', name="Tick")
 
-NBP_decoder = init_and_train(128, 2, 384, 18, 'toric', name = "WS")
-train(NBP_decoder)
-
-NBP_dec = init_and_train(128, 2, 384, 18, 'toric', name = "NoWS")
-train(NBP_dec)
+# Trick = init_and_train(48, 6, 2000, 6, 'GB', name="Trick")
+#
+# Track = init_and_train(48, 6, 2000, 6, 'GB', name="Track")
 
 print("Training and pruning completed.\n")
 
