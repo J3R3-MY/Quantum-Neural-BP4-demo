@@ -29,6 +29,7 @@ class NBP_oc(nn.Module):
         #m is the number of rows of the full rank check matrix
         self.m = n - k
         self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) +"_" + str(self.name) + "/"
+        self.current_line = 0
         #If True, then all outgoing edges on the same CN has the same weight, configurable
         if self.name == 'NoWS':
             self.one_weight_per_cn = False
@@ -40,7 +41,6 @@ class NBP_oc(nn.Module):
 
         self.xhat = torch.zeros((batch_size, self.n))
         self.zhat = torch.zeros((batch_size, self.n))
-        self.pruned_weights = []
         self.load_matrices()
 
         if not folder_weights:
@@ -760,15 +760,7 @@ def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0
     loss_length = num_batch
     loss = torch.zeros(loss_length)
 
-    # ---- Set ONE of these flags to True for exclusive training ----
-    train_errorx_only = False  # Set to True for X errors only
-    train_errorz_only = False  # Set to True for Z errors only
     # --------------------------------------------------------------
-
-    if (decoder.name == "X"):
-        train_errorx_only = True
-    if (decoder.name == "Z"):
-        train_errorz_only = True
 
     idx = 0
     with tqdm(total=loss_length) as pbar:
@@ -777,31 +769,29 @@ def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0
             errorz = torch.tensor([])
             for w in range(r1, r2):
                 batch_subsize = decoder.batch_size // (r2 - r1 + 1)
-                if train_errorx_only:
-                    ex, _ = addErrorGivenWeight(decoder.n, w, batch_subsize)
-                    errorx = torch.cat((errorx, ex), dim=0)
-                    errorz = torch.cat((errorz, torch.zeros_like(ex)), dim=0)
-                elif train_errorz_only:
-                    _, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
-                    errorx = torch.cat((errorx, torch.zeros_like(ez)), dim=0)
-                    errorz = torch.cat((errorz, ez), dim=0)
-                else:
-                    ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
-                    errorx = torch.cat((errorx, ex), dim=0)
-                    errorz = torch.cat((errorz, ez), dim=0)
+                ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
+                errorx = torch.cat((errorx, ex), dim=0)
+                errorz = torch.cat((errorz, ez), dim=0)
             res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
-            if train_errorx_only:
-                ex, _ = addErrorGivenWeight(decoder.n, r2, res_size)
-                errorx = torch.cat((errorx, ex), dim=0)
-                errorz = torch.cat((errorz, torch.zeros_like(ex)), dim=0)
-            elif train_errorz_only:
-                _, ez = addErrorGivenWeight(decoder.n, r2, res_size)
-                errorx = torch.cat((errorx, torch.zeros_like(ez)), dim=0)
-                errorz = torch.cat((errorz, ez), dim=0)
-            else:
-                ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
-                errorx = torch.cat((errorx, ex), dim=0)
-                errorz = torch.cat((errorz, ez), dim=0)
+            ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+            errorx = torch.cat((errorx, ex), dim=0)
+            errorz = torch.cat((errorz, ez), dim=0)
+
+            if(decoder.name == "Tick"):
+                print("Training on others mistakes...")
+                patterns = load_tokenized_error_lines('forTick-1.txt')
+                errorx, errorz, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, decoder.batch_size, decoder.current_line)
+
+
+            if(decoder.name == "Trick"):
+                print("Training on others mistakes...")
+                patterns = load_tokenized_error_lines('forTrick-1.txt')
+                errorx, errorz, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, decoder.batch_size, decoder.current_line)
+
+            if(decoder.name == "Track"):
+                print("Training on others mistakes...")
+                patterns = load_tokenized_error_lines('forTrack-1.txt')
+                errorx, errorz, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, decoder.batch_size, decoder.current_line)
 
             loss[idx]= optimization_step(decoder, ep0, optimizer, errorx, errorz)
             pbar.update(1)
@@ -975,39 +965,54 @@ def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
                 errorz[b,p] = 1
     return errorx, errorz
 
-def addErrorfromEnsemble(n: int, txt_path: str, batch_size: int = 1):
+
+def addErrorfromEnsemble(n: int, lines_tokenized: list, batch_size: int = 1, start_line: int = 0):
     """
-    Reads a .txt file with error patterns (e.g., 'Y0 X5 Z9 ...') and returns errorx/errorz arrays.
+    lines_tokenized: list of lists, each inner list contains tokens for a line (e.g. ['X5', 'Y7', 'Z11'])
+    Returns (errorx, errorz, next_line).
     """
     errorx = torch.zeros((batch_size, n))
     errorz = torch.zeros((batch_size, n))
-    # Read lines from the file
-    with open(txt_path, 'r') as f:
-        lines = f.readlines()
-    for b in range(batch_size):
-        if b >= len(lines):
-            break  # Don't overrun the available patterns
-        line = lines[b].strip()
-        if not line:
-            continue  # skip empty lines
-        tokens = line.split()
+    end_line = min(start_line + batch_size, len(lines_tokenized))
+    for b, idx in enumerate(range(start_line, end_line)):
+        tokens = lines_tokenized[idx]
         for token in tokens:
-            if token[0] not in 'XYZxyz':
-                continue  # skip tokens that aren't error labels
+            if token and token[0] in 'XYZxyz':
+                try:
+                    pos = int(token[1:])
+                except Exception:
+                    continue
+                if 0 <= pos < n:
+                    if token[0] in 'Xx':
+                        errorx[b, pos] = 1
+                    if token[0] in 'Zz':
+                        errorz[b, pos] = 1
+                    if token[0] in 'Yy':
+                        errorx[b, pos] = 1
+                        errorz[b, pos] = 1
+    return errorx, errorz, end_line
+
+def load_tokenized_error_lines(txt_path: str):
+    """
+    Loads lines from a txt file, removes any trailing float, splits into tokens.
+    Returns a list of lists of tokens.
+    """
+    lines_tokenized = []
+    with open(txt_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            # Remove trailing float if present
             try:
-                pos = int(token[1:])
-            except ValueError:
-                continue  # skip if not a valid integer after X/Y/Z
-            if pos < 0 or pos >= n:
-                continue  # skip out-of-bounds
-            if token[0] in 'Xx':
-                errorx[b, pos] = 1
-            if token[0] in 'Zz':
-                errorz[b, pos] = 1
-            if token[0] in 'Yy':
-                errorx[b, pos] = 1
-                errorz[b, pos] = 1
-    return errorx, errorz
+                float(parts[-1])
+                if len(parts) > 1:
+                    parts = parts[:-1]
+            except Exception:
+                pass
+            lines_tokenized.append(parts)
+    return lines_tokenized
 
 
 # give parameters for the code and decoder
@@ -1026,11 +1031,11 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             NBP_decoder.prune_weights(percent)
 #             train(NBP_decoder)
 
-Tick = init_and_train(48, 6, 2000, 6, 'GB', name="Tick")
+Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
 
-Trick = init_and_train(48, 6, 2000, 6, 'GB', name="Trick")
+Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
 
-Track = init_and_train(48, 6, 2000, 6, 'GB', name="Track")
+Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
 
 print("Training and pruning completed.\n")
 
