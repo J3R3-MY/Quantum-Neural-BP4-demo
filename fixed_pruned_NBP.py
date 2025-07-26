@@ -760,18 +760,18 @@ def BoostingTraining(decoder: NBP_oc, errorx, errorz, subsize):
     """
     if(decoder.name == "Tick"):
         print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('forTick-2.txt')
+        patterns = load_tokenized_error_lines('forTick-3.txt')
         ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
 
 
     if(decoder.name == "Trick"):
         print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('forTrick-2.txt')
+        patterns = load_tokenized_error_lines('forTrick-3.txt')
         ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
 
     if(decoder.name == "Track"):
         print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('forTrack-2.txt')
+        patterns = load_tokenized_error_lines('forTrack-3.txt')
         ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
 
 
@@ -868,7 +868,7 @@ def train(NBP_dec:NBP_oc):
         # number of updates
         n_batches = 500
         if specialize:
-            n_batches = 100
+            n_batches = 200
     elif(NBP_dec.codeType == 'toric'):
         lr = 1
         torch.autograd.set_detect_anomaly(True)
@@ -904,19 +904,20 @@ def train(NBP_dec:NBP_oc):
     print(f'learning rate = {lr}\n')
 
     if (NBP_dec.codeType == 'GB'): 
-        #pre-training stage, basically only the parameters for the first iteration is trained
-        loss_pre_train = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
-        plot_loss(loss_pre_train, NBP_dec.path)
+        if (not specialize):
+            #pre-training stage, basically only the parameters for the first iteration is trained
+            loss_pre_train = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+            plot_loss(loss_pre_train, NBP_dec.path)
 
 
-        #continue to train with higher weight errors, mostly for the later iterations
-        r1 = 3
-        r2 = 9
+            #continue to train with higher weight errors, mostly for the later iterations
+            r1 = 3
+            r2 = 9
 
-        n_batches = 200
-        loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+            n_batches = 200
+            loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
 
-        plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
+            plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
 
 
 
@@ -1046,22 +1047,25 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 
 specialize = False
 
-Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
-Tick.prune_weights(0.4)
-train(Tick)
+if(not specialize):
+    Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
+    Tick.prune_weights(0.4)
+    train(Tick)
 
-Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
-Trick.prune_weights(0.4)
-train(Trick)
+    Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
+    Trick.prune_weights(0.4)
+    train(Trick)
 
-Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
-Track.prune_weights(0.4)
-train(Track)
+    Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
+    Track.prune_weights(0.4)
+    train(Track)
+else:
+    Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
 
-# specilize = True
-# train(Tick)
-# train(Trick)
-# train(Track)
+    Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
+
+    Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
+
 
 print("Training and pruning completed.\n")
 
