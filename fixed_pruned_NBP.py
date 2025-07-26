@@ -754,44 +754,53 @@ def optimization_toric(decoder: NBP_oc, ep0, optimizer: torch.optim.Optimizer, e
 
     return loss.detach(), loss_min.detach()
 
+def BoostingTraining(decoder: NBP_oc, errorx, errorz, subsize):
+    """
+    Creates errors from .txt file to enable model to learn from the mistakes of its predecessors
+    """
+    if(decoder.name == "Tick"):
+        print("Training on others mistakes...")
+        patterns = load_tokenized_error_lines('forTick-2.txt')
+        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
+
+
+    if(decoder.name == "Trick"):
+        print("Training on others mistakes...")
+        patterns = load_tokenized_error_lines('forTrick-2.txt')
+        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
+
+    if(decoder.name == "Track"):
+        print("Training on others mistakes...")
+        patterns = load_tokenized_error_lines('forTrack-2.txt')
+        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
+
+
+    errorx = torch.cat((errorx, ex), dim=0)
+    errorz = torch.cat((errorz, ez), dim=0)
+
+    return errorx, errorz
 
 def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0, num_batch, path):
     print(f'training on random errors, weight from {r1} to {r2} ')
     loss_length = num_batch
     loss = torch.zeros(loss_length)
 
-    # --------------------------------------------------------------
-
     idx = 0
     with tqdm(total=loss_length) as pbar:
         for i_batch in range(num_batch):
             errorx = torch.tensor([])
             errorz = torch.tensor([])
-            for w in range(r1, r2):
-                batch_subsize = decoder.batch_size // (r2 - r1 + 1)
-                ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
-                errorx = torch.cat((errorx, ex), dim=0)
-                errorz = torch.cat((errorz, ez), dim=0)
-            res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
-            ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
-            errorx = torch.cat((errorx, ex), dim=0)
-            errorz = torch.cat((errorz, ez), dim=0)
+            # for w in range(r1, r2):
+            #     batch_subsize = decoder.batch_size // (r2 - r1 + 1)
+            #     ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
+            #     errorx = torch.cat((errorx, ex), dim=0)
+            #     errorz = torch.cat((errorz, ez), dim=0)
+            # res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
+            # ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+            # errorx = torch.cat((errorx, ex), dim=0)
+            # errorz = torch.cat((errorz, ez), dim=0)
+            errorx, errorz = BoostingTraining(decoder, errorx, errorz, decoder.batch_size)
 
-            if(decoder.name == "Tick"):
-                print("Training on others mistakes...")
-                patterns = load_tokenized_error_lines('forTick-1.txt')
-                errorx, errorz, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, decoder.batch_size, decoder.current_line)
-
-
-            if(decoder.name == "Trick"):
-                print("Training on others mistakes...")
-                patterns = load_tokenized_error_lines('forTrick-1.txt')
-                errorx, errorz, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, decoder.batch_size, decoder.current_line)
-
-            if(decoder.name == "Track"):
-                print("Training on others mistakes...")
-                patterns = load_tokenized_error_lines('forTrack-1.txt')
-                errorx, errorz, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, decoder.batch_size, decoder.current_line)
 
             loss[idx]= optimization_step(decoder, ep0, optimizer, errorx, errorz)
             pbar.update(1)
