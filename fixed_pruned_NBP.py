@@ -790,16 +790,18 @@ def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0
         for i_batch in range(num_batch):
             errorx = torch.tensor([])
             errorz = torch.tensor([])
-            # for w in range(r1, r2):
-            #     batch_subsize = decoder.batch_size // (r2 - r1 + 1)
-            #     ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
-            #     errorx = torch.cat((errorx, ex), dim=0)
-            #     errorz = torch.cat((errorz, ez), dim=0)
-            # res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
-            # ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
-            # errorx = torch.cat((errorx, ex), dim=0)
-            # errorz = torch.cat((errorz, ez), dim=0)
-            errorx, errorz = BoostingTraining(decoder, errorx, errorz, decoder.batch_size)
+            if (not specialize):
+                for w in range(r1, r2):
+                    batch_subsize = decoder.batch_size // (r2 - r1 + 1)
+                    ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
+                    errorx = torch.cat((errorx, ex), dim=0)
+                    errorz = torch.cat((errorz, ez), dim=0)
+                res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
+                ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+                errorx = torch.cat((errorx, ex), dim=0)
+                errorz = torch.cat((errorz, ez), dim=0)
+            else:
+                errorx, errorz = BoostingTraining(decoder, errorx, errorz, decoder.batch_size)
 
 
             loss[idx]= optimization_step(decoder, ep0, optimizer, errorx, errorz)
@@ -865,6 +867,8 @@ def train(NBP_dec:NBP_oc):
         ep0 = 0.1
         # number of updates
         n_batches = 500
+        if specialize:
+            n_batches = 100
     elif(NBP_dec.codeType == 'toric'):
         lr = 1
         torch.autograd.set_detect_anomaly(True)
@@ -1040,11 +1044,24 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             NBP_decoder.prune_weights(percent)
 #             train(NBP_decoder)
 
+specialize = False
+
 Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
+Tick.prune_weights(0.4)
+train(Tick)
 
 Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
+Trick.prune_weights(0.4)
+train(Trick)
 
 Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
+Track.prune_weights(0.4)
+train(Track)
+
+# specilize = True
+# train(Tick)
+# train(Trick)
+# train(Track)
 
 print("Training and pruning completed.\n")
 
