@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
                 stabilizerCodes Trick(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
                 stabilizerCodes Track(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
 
-                stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
+                // stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
 								// dude.add_decoder(sisi);
 								dude.add_decoder(Tick);
 								// dude.add_decoder(Trick);
@@ -98,25 +98,26 @@ int main(int argc, char *argv[]) {
         				
 #pragma omp critical
                 {
-									if (!success[1]) {
+									if (!success[1]) 
+											failure += 1;
+									{
 											// Print each string in the error string vector, separated by spaces
 											const auto& errorStrings = dude.list_of_decoders[0].getErrorString();
 											for (const auto& s : errorStrings) {
 													std::cout << s << " ";
 											}
-											std::cout << epsilon << std::endl;
+											std::cout << std::endl;
 
-											failure += 1;
 									}
 									total_decoding += 1;
 											}
             }
         }
-        std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
-        std::cout << epsilon << " " << (failure / total_decoding) << "\\\\" << std::endl;
-    		if (epsilon == 0.06){
-    			break;
-    			return 0;
+        // std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
+        // std::cout << epsilon << " " << (failure / total_decoding) << "\\\\" << std::endl;
+						if (epsilon == 0.06){
+							break;
+							return 0;
 				}
     }
     return 0;
