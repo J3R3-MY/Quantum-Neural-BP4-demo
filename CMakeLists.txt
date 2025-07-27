@@ -5,6 +5,8 @@ set(CMAKE_BUILD_TYPE Debug)
 
 link_libraries(stdc++fs)
 
+link_libraries(stdc++fs)
+
 add_executable(NBP_jupyter
         simulateFER.cpp
         stabilizerCodes.cpp
