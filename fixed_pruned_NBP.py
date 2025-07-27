@@ -760,18 +760,18 @@ def BoostingTraining(decoder: NBP_oc, errorx, errorz, subsize):
     """
     if(decoder.name == "Tick"):
         print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('forTick-3.txt')
+        patterns = load_tokenized_error_lines('2b-forTick.txt')
         ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
 
 
     if(decoder.name == "Trick"):
         print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('forTrick-3.txt')
+        patterns = load_tokenized_error_lines('2b-forTrick.txt')
         ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
 
     if(decoder.name == "Track"):
         print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('forTrack-3.txt')
+        patterns = load_tokenized_error_lines('2b-forTrack.txt')
         ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
 
 
@@ -1045,7 +1045,7 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             NBP_decoder.prune_weights(percent)
 #             train(NBP_decoder)
 
-specialize = False
+specialize = True
 
 if(not specialize):
     Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
