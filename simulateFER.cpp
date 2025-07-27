@@ -99,8 +99,8 @@ int main(int argc, char *argv[]) {
 #pragma omp critical
                 {
 									if (!success[1]) 
-											failure += 1;
 									{
+											failure += 1;
 											// Print each string in the error string vector, separated by spaces
 											const auto& errorStrings = dude.list_of_decoders[0].getErrorString();
 											for (const auto& s : errorStrings) {
