@@ -537,17 +537,19 @@ class NBP_oc(nn.Module):
         """
         print('continue training with previous weights')
 
+        import torch.nn.utils.prune
+
         if device == 'cpu':
             # Safe loading for ParameterList in PyTorch >=2.6:
-            with torch.serialization.safe_globals([torch.nn.modules.container.ParameterList]):
-                weights_vn = torch.load(self.path + 'weights_vn.pt', map_location=torch.device('cpu'))
-                weights_cn = torch.load(self.path + 'weights_cn.pt', map_location=torch.device('cpu'))
-                weights_llr = torch.load(self.path + 'weights_llr.pt', map_location=torch.device('cpu'))
+            with torch.serialization.safe_globals([torch.nn.modules.container.ParameterList, torch.nn.utils.prune.CustomFromMask]):
+                weights_vn = torch.load(self.path + 'weights_vn.pt', map_location=torch.device('cpu'), weights_only=False)
+                weights_cn = torch.load(self.path + 'weights_cn.pt', map_location=torch.device('cpu'), weights_only=False)
+                weights_llr = torch.load(self.path + 'weights_llr.pt', map_location=torch.device('cpu'), weights_only=False)
         else:
-            with torch.serialization.safe_globals([torch.nn.modules.container.ParameterList]):
-                weights_cn = torch.load(self.path + 'weights_cn.pt')
-                weights_vn = torch.load(self.path + 'weights_vn.pt')
-                weights_llr = torch.load(self.path + 'weights_llr.pt')
+            with torch.serialization.safe_globals([torch.nn.modules.container.ParameterList, torch.nn.utils.prune.CustomFromMask]):
+                weights_cn = torch.load(self.path + 'weights_cn.pt', weights_only=False)
+                weights_vn = torch.load(self.path + 'weights_vn.pt', weights_only=False)
+                weights_llr = torch.load(self.path + 'weights_llr.pt', weights_only=False)
 
         self.weights_llr = weights_llr
         self.weights_cn = weights_cn
@@ -904,12 +906,12 @@ def train(NBP_dec:NBP_oc):
     print(f'learning rate = {lr}\n')
 
     if (NBP_dec.codeType == 'GB'): 
-        if (not specialize):
             #pre-training stage, basically only the parameters for the first iteration is trained
-            loss_pre_train = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
-            plot_loss(loss_pre_train, NBP_dec.path)
+        loss_pre_train = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+        plot_loss(loss_pre_train, NBP_dec.path)
 
 
+        if (not specialize):
             #continue to train with higher weight errors, mostly for the later iterations
             r1 = 3
             r2 = 9
