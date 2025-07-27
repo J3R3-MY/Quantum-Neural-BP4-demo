@@ -37,6 +37,10 @@ int main(int argc, char *argv[]) {
     fileReader matrix_pruned2(n, k, m, codeType, trained, "Trick");
     fileReader matrix_pruned3(n, k, m, codeType, trained, "Track");
 
+
+    fileReader high(n, k, m, codeType, trained, "High");
+    fileReader low(n, k, m, codeType, trained, "Low");
+
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
     //    double ep_list[] =
@@ -77,24 +81,29 @@ int main(int argc, char *argv[]) {
          				ensembleDecoder dude(decoder_names, list, matrix_supplier);
 
 
-                stabilizerCodes Tick(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes Trick(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes Track(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
+                // stabilizerCodes Tick(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
+                // stabilizerCodes Trick(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
+                // stabilizerCodes Track(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
+
+                stabilizerCodes High(n, k, m, codeType, high, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes Low(n, k, m, codeType, low, trained, errorCreator.getErrorString(), errorCreator.getError());
 
                 // stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
 								// dude.add_decoder(sisi);
-								dude.add_decoder(Tick);
+								// dude.add_decoder(Tick);
 								// dude.add_decoder(Trick);
 								// dude.add_decoder(Track);
+								dude.add_decoder(High);
+								dude.add_decoder(Low);
 								
-								success = dude.decodeAllPaths(decIterNum, ep0);
+								// success = dude.decodeAllPaths(decIterNum, ep0);
 
-								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
-								// 		success = dude.list_of_decoders[i].decode(decIterNum, ep0);
-								// 		if (success[1]) {
-								// 			break;
-								// 		}
-								// }
+								for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
+										success = dude.list_of_decoders[i].decode(decIterNum, ep0);
+										if (success[1]) {
+											break;
+										}
+								}
         				
 #pragma omp critical
                 {
@@ -102,23 +111,23 @@ int main(int argc, char *argv[]) {
 									{
 											failure += 1;
 											// Print each string in the error string vector, separated by spaces
-											const auto& errorStrings = dude.list_of_decoders[0].getErrorString();
-											for (const auto& s : errorStrings) {
-													std::cout << s << " ";
-											}
-											std::cout << std::endl;
+											// const auto& errorStrings = dude.list_of_decoders[0].getErrorString();
+											// for (const auto& s : errorStrings) {
+											// 		std::cout << s << " ";
+											// }
+											// std::cout << std::endl;
 
 									}
 									total_decoding += 1;
 											}
             }
         }
-        // std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
-        // std::cout << epsilon << " " << (failure / total_decoding) << "\\\\" << std::endl;
-						if (epsilon == 0.06){
-							break;
-							return 0;
-				}
+        std::cout << "% FE " << failure << ", total dec. " << total_decoding << "\\\\" << std::endl;
+        std::cout << epsilon << " " << (failure / total_decoding) << "\\\\" << std::endl;
+				// 		if (epsilon == 0.06){
+				// 			break;
+				// 			return 0;
+				// }
     }
     return 0;
 }
