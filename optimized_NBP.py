@@ -864,11 +864,15 @@ def train(NBP_dec:NBP_oc):
 
     if(NBP_dec.codeType == 'GB'):
         lr = 0.001
-        r1 = 2
-        r2 = 3
+        if (NBP_dec.name == 'Low'):
+            r1 = 2
+            r2 = 3
+        if (NBP_dec.name == 'High'):
+            r1 = 5
+            r2 = 6
         ep0 = 0.1
         # number of updates
-        n_batches = 500
+        n_batches = 1500
         if specialize:
             n_batches = 200
     elif(NBP_dec.codeType == 'toric'):
@@ -913,10 +917,14 @@ def train(NBP_dec:NBP_oc):
 
         if (not specialize):
             #continue to train with higher weight errors, mostly for the later iterations
-            r1 = 3
-            r2 = 9
+            if (NBP_dec.name == 'Low'):
+                r1 = 3
+                r2 = 9
+            if (NBP_dec.name == 'High'):
+                r1 = 5
+                r2 = 11
 
-            n_batches = 200
+            n_batches = 600
             loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
 
             plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
@@ -940,7 +948,7 @@ def init_and_train(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pret
 
     if(codeType == 'GB'):
         #number of error patterns in each mini batch
-        batch_size = 100
+        batch_size = 120
     elif(codeType == 'toric'):
         #number of error patterns in each mini batch
         num_points = 6
@@ -1047,21 +1055,25 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             NBP_decoder.prune_weights(percent)
 #             train(NBP_decoder)
 
-specialize = True
+specialize = False
 
 if(not specialize):
-    Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
-    Tick.prune_weights(0.4)
-    train(Tick)
+#     Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
+#     Tick.prune_weights(0.4)
+#     train(Tick)
 
-    Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
-    Trick.prune_weights(0.4)
-    train(Trick)
+    High = init_and_train(48, 6, 2000, 6, 'GB', name="High")
 
-    Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
-    Track.prune_weights(0.4)
-    train(Track)
-else:
+    Low = init_and_train(48, 6, 2000, 6, 'GB', name="Low")
+#
+#     Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
+#     Trick.prune_weights(0.4)
+#     train(Trick)
+#
+#     Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
+#     Track.prune_weights(0.4)
+#     train(Track)
+# else:
     Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
 
     Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
