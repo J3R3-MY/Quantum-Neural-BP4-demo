@@ -11,18 +11,28 @@ import random
 import matplotlib.pylab as plt
 
 
-
 class NBP_oc(nn.Module):
-    def __init__(self, n: int, k: int, m: int, m1: int, m2: int, codeType: str, n_iterations: int,
-                 folder_weights: bool = False, name: str = "default",
-                 batch_size: int = 1):
+    def __init__(
+        self,
+        n: int,
+        k: int,
+        m: int,
+        m1: int,
+        m2: int,
+        codeType: str,
+        n_iterations: int,
+        error_weights: tuple,
+        folder_weights: bool = False,
+        name: str = "default",
+        batch_size: int = 1,
+    ):
         super().__init__()
         self.name = name
         self.batch_size = batch_size
         self.codeType = codeType
         self.n = n
         self.k = k
-        #m_oc is the number rows of the overcomplete check matrix
+        # m_oc is the number rows of the overcomplete check matrix
         self.m_oc = m
         self.m1 = m1
         self.m2 = m2
@@ -30,6 +40,7 @@ class NBP_oc(nn.Module):
         self.m = n - k
         self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) +"_" + str(self.name) + "/"
         self.current_line = 0
+        self.error_weights = error_weights
         #If True, then all outgoing edges on the same CN has the same weight, configurable
         if self.name == 'NoWS':
             self.one_weight_per_cn = False
@@ -792,7 +803,7 @@ def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0
         for i_batch in range(num_batch):
             errorx = torch.tensor([])
             errorz = torch.tensor([])
-            if (not specialize):
+            if (not boosting):
                 for w in range(r1, r2):
                     batch_subsize = decoder.batch_size // (r2 - r1 + 1)
                     ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
@@ -864,17 +875,10 @@ def train(NBP_dec:NBP_oc):
 
     if(NBP_dec.codeType == 'GB'):
         lr = 0.001
-        if (NBP_dec.name == 'Low'):
-            r1 = 2
-            r2 = 3
-        if (NBP_dec.name == 'High'):
-            r1 = 5
-            r2 = 6
+        r1, r2 = NBP_dec.error_weights
         ep0 = 0.1
         # number of updates
         n_batches = 1500
-        if specialize:
-            n_batches = 200
     elif(NBP_dec.codeType == 'toric'):
         lr = 1
         torch.autograd.set_detect_anomaly(True)
@@ -915,19 +919,14 @@ def train(NBP_dec:NBP_oc):
         plot_loss(loss_pre_train, NBP_dec.path)
 
 
-        if (not specialize):
             #continue to train with higher weight errors, mostly for the later iterations
-            if (NBP_dec.name == 'Low'):
-                r1 = 3
-                r2 = 9
-            if (NBP_dec.name == 'High'):
-                r1 = 5
-                r2 = 11
-
-            n_batches = 600
-            loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
-
-            plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
+            # r1 = 3
+            # r2 = 9
+            #
+            # n_batches = 600
+            # loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+            #
+            # plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
 
 
 
@@ -941,21 +940,29 @@ def train(NBP_dec:NBP_oc):
         plot_loss(loss_pre_train, NBP_dec.path)
 
 
-def init_and_train(n:int, k:int, m:int, n_iterations:int, codeType:str, use_pretrained_weights:bool = False, name: str = "default"):
-    # give parameters for the code and decoder
+def init_and_train(
+    n: int,
+    k: int,
+    m: int,
+    n_iterations: int,
+    error_weights: tuple,
+    codeType: str,
+    use_pretrained_weights: bool = False,
+    name: str = "default",
+):
     m1 = m // 2
     m2 = m // 2
 
     if(codeType == 'GB'):
         #number of error patterns in each mini batch
-        batch_size = 120
+        batch_size = 200
     elif(codeType == 'toric'):
         #number of error patterns in each mini batch
         num_points = 6
         batch_size = 20*num_points
 
 
-    decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, use_pretrained_weights, name, batch_size)
+    decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, error_weights, use_pretrained_weights, name, batch_size)
 
     train(decoder)
 
@@ -1055,30 +1062,33 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             NBP_decoder.prune_weights(percent)
 #             train(NBP_decoder)
 
-specialize = False
+boosting = False
 
-if(not specialize):
-#     Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
-#     Tick.prune_weights(0.4)
-#     train(Tick)
-
-    High = init_and_train(48, 6, 2000, 6, 'GB', name="High")
-
-    Low = init_and_train(48, 6, 2000, 6, 'GB', name="Low")
+# Ichiji = init_and_train(48, 6, 2000, 6, (1,2), 'GB', name="Ichiji")
 #
-#     Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
-#     Trick.prune_weights(0.4)
-#     train(Trick)
+# Niji = init_and_train(48, 6, 2000, 6, (2,3), 'GB', name="Niji")
 #
-#     Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
-#     Track.prune_weights(0.4)
-#     train(Track)
-# else:
-    Tick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Tick")
+# Sanji = init_and_train(48, 6, 2000, 6, (3,4), 'GB', name="Sanji")
+#
+# Yonji = init_and_train(48, 6, 2000, 6, (4,5), 'GB', name="Yonji")
 
-    Trick = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Trick")
+Goji = init_and_train(48, 6, 2000, 6, (5,6), 'GB', name="Goji")
 
-    Track = init_and_train(48, 6, 2000, 6, 'GB', use_pretrained_weights=True, name="Track")
+Rokiji = init_and_train(48, 6, 2000, 6, (6,7), 'GB', name="Rokiji")
+
+Nanaji = init_and_train(48, 6, 2000, 6, (7,8), 'GB', name="Nanaji")
+
+Hachiji = init_and_train(48, 6, 2000, 6, (8,9), 'GB', name="Hachiji")
+
+
+    # Ichiji = init_and_train(48, 6, 2000, 6, (1,1), 'GB', name="Ichiji")
+    #
+    # Niji = init_and_train(48, 6, 2000, 6, (2,2), 'GB', name="Niji")
+    #
+    # Sanji = init_and_train(48, 6, 2000, 6, (3,3), 'GB', name="Sanji")
+    #
+    # Yonji = init_and_train(48, 6, 2000, 6, (4,4), 'GB', name="Yonji")
+
 
 
 print("Training and pruning completed.\n")
