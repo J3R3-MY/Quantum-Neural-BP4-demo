@@ -33,9 +33,10 @@ int main(int argc, char *argv[]) {
     fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "Vanilla");
     matrix_supplier.check_symplectic();
 
-    fileReader matrix_pruned1(n, k, m, codeType, trained, "Tick");
-    fileReader matrix_pruned2(n, k, m, codeType, trained, "Trick");
-    fileReader matrix_pruned3(n, k, m, codeType, trained, "Track");
+    fileReader matrix_pruned1(n, k, m, codeType, trained, "Ichiji");
+    fileReader matrix_pruned2(n, k, m, codeType, trained, "Niji");
+    fileReader matrix_pruned3(n, k, m, codeType, trained, "Sanji");
+    fileReader matrix_pruned4(n, k, m, codeType, trained, "Yonji");
 
 
     // fileReader high(n, k, m, codeType, trained, "NoWS");
@@ -81,29 +82,25 @@ int main(int argc, char *argv[]) {
          				ensembleDecoder dude(decoder_names, list, matrix_supplier);
 
 
-                stabilizerCodes Tick(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes Trick(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes Track(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
-
+                stabilizerCodes ichi(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes ni(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes san(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
+                stabilizerCodes yo(n, k, m, codeType, matrix_pruned4, trained, errorCreator.getErrorString(), errorCreator.getError());
                 // stabilizerCodes High(n, k, m, codeType, high, trained, errorCreator.getErrorString(), errorCreator.getError());
-                // stabilizerCodes Low(n, k, m, codeType, low, trained, errorCreator.getErrorString(), errorCreator.getError());
-
-                // stabilizerCodes sisi(n, k, m, codeType, matrix_supplier, trained, errorCreator.getErrorString(), errorCreator.getError());
+                dude.add_decoder(ichi);
+                dude.add_decoder(ni);
+                dude.add_decoder(san);
+                dude.add_decoder(yo);
 								// dude.add_decoder(sisi);
-								dude.add_decoder(Tick);
-								dude.add_decoder(Trick);
-								dude.add_decoder(Track);
-								// dude.add_decoder(High);
-								// dude.add_decoder(Low);
 								
-								success = dude.decodeAllPaths(decIterNum, ep0);
+								// success = dude.decodeAllPaths(decIterNum, ep0);
 
-								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
-								// 		success = dude.list_of_decoders[i].decode(decIterNum, ep0);
-								// 		if (success[1]) {
-								// 			break;
-								// 		}
-								// }
+								for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
+										success = dude.list_of_decoders[i].decode(decIterNum, ep0);
+										if (success[1]) {
+											break;
+										}
+								}
         				
 #pragma omp critical
                 {
