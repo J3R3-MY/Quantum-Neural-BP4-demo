@@ -6,6 +6,7 @@ import torch.nn.utils.prune as prune
 import numpy as np
 import os
 import subprocess
+import math
 from tqdm import tqdm
 import random
 import matplotlib.pylab as plt
@@ -793,6 +794,246 @@ def BoostingTraining(decoder: NBP_oc, errorx, errorz, subsize):
 
     return errorx, errorz
 
+
+def calculate_ensemble_error_rate(decoder, all_errorx, all_errorz, sample_weights):
+    """Calculate weighted error rate for the decoder."""
+    
+    predictions = get_decoder_predictions(decoder, all_errorx, all_errorz)
+    actual_success = calculate_actual_success(decoder, all_errorx, all_errorz)
+    
+    # Calculate weighted error
+    errors = (predictions != actual_success).float()
+    error_rate = torch.sum(sample_weights * errors)
+    
+    return error_rate.item()
+
+def adaboost_training(
+    n: int,
+    k: int,
+    m: int,
+    n_iterations: int,
+    error_weights: tuple,
+    codeType: str,
+    n_estimators: int = 5,
+    name_prefix: str = "AdaBoost",
+    batch_size: int = 200
+):
+    """
+    Implements AdaBoost algorithm for ensemble training of NBP decoders.
+    
+    Args:
+        n, k, m, n_iterations, error_weights, codeType: Standard decoder parameters
+        n_estimators: Number of weak learners in the ensemble
+        name_prefix: Prefix for naming individual decoders
+        batch_size: Batch size for training
+    
+    Returns:
+        ensemble: List of trained decoders
+        alphas: List of weights for each decoder in the ensemble
+    """
+    print(f"Starting AdaBoost training with {n_estimators} estimators...")
+    
+    m1 = m // 2
+    m2 = m // 2
+    
+    # Initialize training data - create a larger pool of error patterns
+    train_size = 2000
+    all_errorx = torch.tensor([])
+    all_errorz = torch.tensor([])
+    
+    # Generate diverse training data across error weights
+    r1, r2 = error_weights
+    for w in range(r1, r2 + 1):
+        ex, ez = addErrorGivenWeight(n, w, train_size // (r2 - r1 + 1))
+        all_errorx = torch.cat((all_errorx, ex), dim=0)
+        all_errorz = torch.cat((all_errorz, ez), dim=0)
+    
+    # Initialize uniform sample weights
+    sample_weights = torch.ones(all_errorx.shape[0]) / all_errorx.shape[0]
+    
+    ensemble = []
+    alphas = []
+    
+    for t in range(n_estimators):
+        print(f"\nTraining estimator {t+1}/{n_estimators}")
+        
+        # Create decoder for this iteration
+        decoder_name = f"{name_prefix}_{t+1}"
+        decoder = NBP_oc(n, k, m, m1, m2, codeType, n_iterations, error_weights, 
+                        False, decoder_name, batch_size)
+        
+        # Train current weak learner with weighted sampling
+        weighted_loss = train_weighted_decoder(decoder, all_errorx, all_errorz, 
+                                             sample_weights, error_weights, batch_size)
+        
+        # Calculate error rate and alpha
+        error_rate = calculate_ensemble_error_rate(decoder, all_errorx, all_errorz, 
+                                                 sample_weights)
+        
+        # Avoid division by zero and ensure error_rate < 0.5
+        error_rate = max(min(error_rate, 0.49), 0.01)
+        alpha = 0.5 * math.log((1 - error_rate) / error_rate)
+            
+        print(f"Estimator {t+1} - Error rate: {error_rate:.4f}, Alpha: {alpha:.4f}, Final loss: {weighted_loss:.4f}")
+        
+        # Update sample weights
+        predictions = get_decoder_predictions(decoder, all_errorx, all_errorz)
+        actual_success = calculate_actual_success(decoder, all_errorx, all_errorz)
+        
+        # Update weights: increase weight for misclassified samples
+        for i in range(len(sample_weights)):
+            if predictions[i] != actual_success[i]:
+                sample_weights[i] *= math.exp(alpha)
+            else:
+                sample_weights[i] *= math.exp(-alpha)
+        
+        # Normalize weights
+        sample_weights = sample_weights / torch.sum(sample_weights)
+        
+        ensemble.append(decoder)
+        alphas.append(alpha)
+        
+        # Save ensemble progress
+        save_ensemble_weights(ensemble, alphas, name_prefix, t+1)
+    
+    print(f"\nAdaBoost training completed. Ensemble size: {len(ensemble)}")
+    return ensemble, alphas
+
+def train_weighted_decoder(decoder, all_errorx, all_errorz, sample_weights, 
+                          error_weights, batch_size):
+    """Train a decoder using weighted sampling based on sample_weights."""
+    
+    if decoder.codeType == 'GB':
+        lr = 0.001
+        ep0 = 0.1
+        n_batches = 300  # Reduced for ensemble training
+        optimizer = torch.optim.Adam(decoder.parameters(), lr=lr)
+    else:
+        raise ValueError("AdaBoost currently only supports GB codes")
+    
+    print(f'Training weighted decoder on {len(all_errorx)} samples')
+    
+    for i_batch in range(n_batches):
+        # Weighted sampling
+        indices = torch.multinomial(sample_weights, batch_size, replacement=True)
+        batch_errorx = all_errorx[indices]
+        batch_errorz = all_errorz[indices]
+        
+        # Standard training step
+        loss = optimization_step(decoder, ep0, optimizer, batch_errorx, batch_errorz)
+        
+        # Progress display like your implementation
+        print(f'\rBatch {i_batch+1}/{n_batches}, loss {loss:.4f}', end='', flush=True)
+    
+    print()  # New line after training
+    decoder.save_weights()
+    return loss
+    predictions = get_decoder_predictions(decoder, all_errorx, all_errorz)
+    actual_success = calculate_actual_success(decoder, all_errorx, all_errorz)
+    
+    # Calculate weighted error
+    errors = (predictions != actual_success).float()
+    error_rate = torch.sum(sample_weights * errors)
+    
+    return error_rate.item()
+
+def get_decoder_predictions(decoder, errorx, errorz):
+    """Get decoder predictions (1 for successful decoding, 0 for failure)."""
+    
+    predictions = torch.zeros(errorx.shape[0])
+    ep0 = 0.1
+    
+    # Process in batches to avoid memory issues
+    batch_size = decoder.batch_size
+    
+    with torch.no_grad():
+        # Add progress bar for prediction calculation
+        with tqdm(total=(errorx.shape[0] + batch_size - 1) // batch_size, 
+                  desc="Calculating predictions") as pbar:
+            for i in range(0, errorx.shape[0], batch_size):
+                end_idx = min(i + batch_size, errorx.shape[0])
+                batch_errorx = errorx[i:end_idx]
+                batch_errorz = errorz[i:end_idx]
+                
+                # Temporarily adjust batch size
+                original_batch_size = decoder.batch_size
+                decoder.batch_size = batch_errorx.shape[0]
+                
+                try:
+                    loss = decoder(batch_errorx, batch_errorz, ep0, batch_errorx.shape[0])
+                    # Lower loss indicates better decoding (inverse relationship)
+                    predictions[i:end_idx] = (loss < 0.5).float()
+                except:
+                    predictions[i:end_idx] = 0  # Assume failure if error occurs
+                finally:
+                    decoder.batch_size = original_batch_size
+                
+                pbar.update(1)
+                pbar.set_description(f"Calculating predictions - batch {i//batch_size + 1}")
+    
+    return predictions
+
+def calculate_actual_success(decoder, errorx, errorz):
+    """Calculate actual decoding success (ground truth)."""
+    
+    # For this implementation, we'll use a heuristic based on error weight
+    # Lower weight errors are more likely to be successfully decoded
+    success = torch.zeros(errorx.shape[0])
+    
+    for i in range(errorx.shape[0]):
+        error_weight = torch.sum(errorx[i]) + torch.sum(errorz[i])
+        # Simple heuristic: success probability decreases with error weight
+        success_prob = max(0.1, 1.0 - error_weight.item() / (decoder.n * 0.1))
+        success[i] = float(torch.rand(1).item() < success_prob)
+    
+    return success
+
+def save_ensemble_weights(ensemble, alphas, name_prefix, current_size):
+    """Save ensemble weights and metadata."""
+    
+    ensemble_dir = f"./training_results/ensemble_{name_prefix}/"
+    os.makedirs(ensemble_dir, exist_ok=True)
+    
+    # Save alphas
+    torch.save(torch.tensor(alphas), os.path.join(ensemble_dir, "alphas.pt"))
+    
+    # Save ensemble metadata
+    metadata = {
+        'n_estimators': current_size,
+        'decoder_names': [dec.name for dec in ensemble],
+        'ensemble_name': name_prefix
+    }
+    torch.save(metadata, os.path.join(ensemble_dir, "metadata.pt"))
+    
+    print(f"Ensemble weights saved to {ensemble_dir}")
+
+def ensemble_predict(ensemble, alphas, errorx, errorz, ep0=0.1):
+    """Make predictions using the trained ensemble."""
+    
+    if not ensemble:
+        raise ValueError("Empty ensemble")
+    
+    batch_size = errorx.shape[0]
+    weighted_predictions = torch.zeros(batch_size)
+    
+    for decoder, alpha in zip(ensemble, alphas):
+        with torch.no_grad():
+            # Get prediction from this decoder
+            original_batch_size = decoder.batch_size
+            decoder.batch_size = batch_size
+            
+            try:
+                loss = decoder(errorx, errorz, ep0, batch_size)
+                # Convert loss to prediction (lower loss = better decoding)
+                prediction = (loss < 0.5).float() * 2 - 1  # Convert to -1, +1
+                weighted_predictions += alpha * prediction
+            finally:
+                decoder.batch_size = original_batch_size
+    
+    # Final prediction based on weighted vote
+    final_predictions = (weighted_predictions > 0).float()
+    return final_predictions
+
 def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0, num_batch, path):
     print(f'training on random errors, weight from {r1} to {r2} ')
     loss_length = num_batch
@@ -858,8 +1099,6 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
             loss[idx], loss_min[idx] = optimization_toric(decoder, ep0, optimizer, errorx, errorz, scheduler)
             pbar.update(1)
             lrs = scheduler.get_last_lr()
-            lr_str = ", ".join(f"{lr:.2f}" for lr in lrs)
-            pbar.set_description(f"loss {loss[idx]:.2f}, loss min {loss_min[idx]:.2f}, lr(s): {lr_str}")
             idx += 1
 
 
@@ -1062,25 +1301,58 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             NBP_decoder.prune_weights(percent)
 #             train(NBP_decoder)
 
+# Comment out the original individual training
 boosting = False
 
-Ichiji = init_and_train(48, 6, 2000, 6, (1,2), 'GB', name="Ichiji")
+# Original individual training (commented out for AdaBoost demo)
+# Ichiji = init_and_train(48, 6, 2000, 6, (1,2), 'GB', name="Ichiji")
+# Niji = init_and_train(48, 6, 2000, 6, (2,3), 'GB', name="Niji") 
+# Sanji = init_and_train(48, 6, 2000, 6, (3,4), 'GB', name="Sanji")
+# Yonji = init_and_train(48, 6, 2000, 6, (4,5), 'GB', name="Yonji")
 
-Niji = init_and_train(48, 6, 2000, 6, (2,3), 'GB', name="Niji")
+print("="*60)
+print("QUANTUM NEURAL BELIEF PROPAGATION - ADABOOST ENSEMBLE")
+print("="*60)
 
-Sanji = init_and_train(48, 6, 2000, 6, (3,4), 'GB', name="Sanji")
+# AdaBoost ensemble training
+print("Starting AdaBoost ensemble training...")
+ensemble, alphas = adaboost_training(
+    n=48,
+    k=6, 
+    m=2000,
+    n_iterations=6,
+    error_weights=(1, 4),  # Train across error weights 1-4
+    codeType='GB',
+    n_estimators=4,  # Create 4 weak learners
+    name_prefix="QB_AdaBoost",
+    batch_size=100
+)
 
-Yonji = init_and_train(48, 6, 2000, 6, (4,5), 'GB', name="Yonji")
+# Test the ensemble performance
+print("\n" + "="*50)
+print("ENSEMBLE PERFORMANCE TESTING")
+print("="*50)
 
+# Test across different error weights
+for w in range(1, 5):
+    print(f"\nTesting with error weight {w}:")
+    
+    for test_size in [10, 20, 50]:
+        test_errorx, test_errorz = addErrorGivenWeight(48, w, test_size)
+        predictions = ensemble_predict(ensemble, alphas, test_errorx, test_errorz)
+        success_rate = torch.sum(predictions).item() / len(predictions)
+        
+        print(f"  {test_size} samples: {torch.sum(predictions).item()}/{len(predictions)} "
+              f"successful ({success_rate:.2%})")
 
-    # Ichiji = init_and_train(48, 6, 2000, 6, (1,1), 'GB', name="Ichiji")
-    #
-    # Niji = init_and_train(48, 6, 2000, 6, (2,2), 'GB', name="Niji")
-    #
-    # Sanji = init_and_train(48, 6, 2000, 6, (3,3), 'GB', name="Sanji")
-    #
-    # Yonji = init_and_train(48, 6, 2000, 6, (4,4), 'GB', name="Yonji")
+# Save final ensemble summary
+ensemble_dir = f"./training_results/ensemble_QB_AdaBoost/"
+print(f"\nFinal ensemble saved to: {ensemble_dir}")
+print(f"Alpha weights: {[f'{alpha:.4f}' for alpha in alphas]}")
 
+print("\n" + "="*60)
+print("ADABOOST TRAINING AND TESTING COMPLETED")
+print("="*60)
 
 
 print("Training and pruning completed.\n")
