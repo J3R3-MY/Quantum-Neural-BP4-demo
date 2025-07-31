@@ -843,16 +843,31 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
     loss_length = num_batch
     loss = torch.zeros(loss_length)
     loss_min = torch.zeros(loss_length)
+    r1, r2 = decoder.error_weights
 
     idx = 0
     with tqdm(total=loss_length) as pbar:
+        # for i_batch in range(num_batch):
+        #     errorx = torch.tensor([])
+        #     errorz = torch.tensor([])
+        #     for i in range(num_points):
+        #         ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1+i*sep, decoder.batch_size//num_points)
+        #         errorx = torch.cat((errorx, ex), dim=0)
+        #         errorz = torch.cat((errorz, ez), dim=0)
+
+        #Try and add erorrs with a certain weight
         for i_batch in range(num_batch):
             errorx = torch.tensor([])
             errorz = torch.tensor([])
-            for i in range(num_points):
-                ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1+i*sep, decoder.batch_size//num_points)
+            for w in range(r1, r2):
+                batch_subsize = decoder.batch_size // (r2 - r1 + 1)
+                ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
                 errorx = torch.cat((errorx, ex), dim=0)
                 errorz = torch.cat((errorz, ez), dim=0)
+            res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
+            ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+            errorx = torch.cat((errorx, ex), dim=0)
+            errorz = torch.cat((errorz, ez), dim=0)
 
 
             loss[idx], loss_min[idx] = optimization_toric(decoder, ep0, optimizer, errorx, errorz, scheduler)
@@ -875,7 +890,7 @@ def train(NBP_dec:NBP_oc):
 
     if(NBP_dec.codeType == 'GB'):
         lr = 0.001
-        r1, r2 = 2,3
+        r1, r2 = NBP_dec.error_weights
         ep0 = 0.1
         # number of updates
         n_batches = 1500
@@ -887,6 +902,7 @@ def train(NBP_dec:NBP_oc):
         sep=0.01
         num_points = 6
         if m==3*NBP_dec.n:
+            #ep0 = 0.37
             ep0 = 0.49
             ep1=0.06
 
@@ -1066,29 +1082,29 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 
 boosting = False
 
-Smoothie = init_and_train(48, 6, 2000, 8, (1,2), 'GB', name="Smoothie")
-Smoothie.prune(0.2)
+TorIchi = init_and_train(128, 2, 384, 18, (1,2), 'toric', name="TorIchi")
+# TorIchi.prune_weights(0.2)
 
-# Niji = init_and_train(48, 6, 2000, 8, (2,3), 'GB', name="Niji")
-# Niji.prune(0.2)
-#
-# Sanji = init_and_train(48, 6, 2000, 8, (3,4), 'GB', name="Sanji")
-# Sanji.prune_weights(0.2)
-#
-# Yonji = init_and_train(48, 6, 2000, 8, (4,5), 'GB', name="Yonji")
-# Yonji.prune_weights(0.2)
-#
-# Goji = init_and_train(48, 6, 2000, 8, (5,6), 'GB', name="Goji")
-# Goji.prune_weights(0.2)
-#
-# Rokiji = init_and_train(48, 6, 2000, 8, (6,7), 'GB', name="Rokiji")
-# Rokiji.prune_weights(0.2)
-#
-# Nanaji = init_and_train(48, 6, 2000, 8, (7,8), 'GB', name="Nanaji")
-# Nanaji.prune_weights(0.2)
-#
-# Hachiji = init_and_train(48, 6, 2000, 8, (8,9), 'GB', name="Hachiji")
-# Hachiji.prune_weights(0.2)
+TorNi = init_and_train(128, 2, 384, 18, (2,3), 'toric', name="TorNi")
+# TorNi.prune_weights(0.2)
+
+TorSan = init_and_train(128, 2, 384, 18, (3,4), 'toric', name="TorSan")
+# TorSan.prune_weights(0.2)
+
+TorYon = init_and_train(128, 2, 384, 18, (4,5), 'toric', name="TorYon")
+# TorYon.prune_weights(0.2)
+
+TorGo = init_and_train(128, 2, 384, 18, (5,6), 'toric', name="TorGo")
+# TorGo.prune_weights(0.2)
+
+TorRoku = init_and_train(128, 2, 384, 18, (6,7), 'toric', name="TorRoku")
+# TorRoku.prune_weights(0.2)
+
+TorNana = init_and_train(128, 2, 384, 18, (7,8), 'toric', name="TorNana")
+# TorNana.prune_weights(0.2)
+
+TorHachi = init_and_train(128, 2, 384, 18, (8,9), 'toric', name="TorHachi")
+# TorHachi.prune_weights(0.2)
 
 
     # Ichiji = init_and_train(48, 6, 2000, 6, (1,1), 'GB', name="Ichiji")
