@@ -875,7 +875,7 @@ def train(NBP_dec:NBP_oc):
 
     if(NBP_dec.codeType == 'GB'):
         lr = 0.001
-        r1, r2 = NBP_dec.error_weights
+        r1, r2 = 2,3
         ep0 = 0.1
         # number of updates
         n_batches = 1500
@@ -920,13 +920,13 @@ def train(NBP_dec:NBP_oc):
 
 
             #continue to train with higher weight errors, mostly for the later iterations
-            # r1 = 3
-            # r2 = 9
-            #
-            # n_batches = 600
-            # loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
-            #
-            # plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
+        r1 = 3
+        r2 = 9
+
+        n_batches = 600
+        loss = training_loop(NBP_dec, optimizer, r1, r2, ep0, n_batches, NBP_dec.path)
+
+        plot_loss(torch.cat((loss_pre_train, loss) , dim=0), NBP_dec.path)
 
 
 
@@ -955,7 +955,9 @@ def init_and_train(
 
     if(codeType == 'GB'):
         #number of error patterns in each mini batch
-        batch_size = 200
+        #Compare against old one for now
+        # batch_size = 200
+        batch_size = 120
     elif(codeType == 'toric'):
         #number of error patterns in each mini batch
         num_points = 6
@@ -1064,29 +1066,29 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 
 boosting = False
 
-Ichiji = init_and_train(48, 6, 2000, 8, (1,2), 'GB', name="Ichiji")
-Ichiji.prune(0.2)
+Smoothie = init_and_train(48, 6, 2000, 8, (1,2), 'GB', name="Smoothie")
+Smoothie.prune(0.2)
 
-Niji = init_and_train(48, 6, 2000, 8, (2,3), 'GB', name="Niji")
-Niji.prune(0.2)
-
-Sanji = init_and_train(48, 6, 2000, 8, (3,4), 'GB', name="Sanji")
-Sanji.prune_weights(0.2)
-
-Yonji = init_and_train(48, 6, 2000, 8, (4,5), 'GB', name="Yonji")
-Yonji.prune_weights(0.2)
-
-Goji = init_and_train(48, 6, 2000, 8, (5,6), 'GB', name="Goji")
-Goji.prune_weights(0.2)
-
-Rokiji = init_and_train(48, 6, 2000, 8, (6,7), 'GB', name="Rokiji")
-Rokiji.prune_weights(0.2)
-
-Nanaji = init_and_train(48, 6, 2000, 8, (7,8), 'GB', name="Nanaji")
-Nanaji.prune_weights(0.2)
-
-Hachiji = init_and_train(48, 6, 2000, 8, (8,9), 'GB', name="Hachiji")
-Hachiji.prune_weights(0.2)
+# Niji = init_and_train(48, 6, 2000, 8, (2,3), 'GB', name="Niji")
+# Niji.prune(0.2)
+#
+# Sanji = init_and_train(48, 6, 2000, 8, (3,4), 'GB', name="Sanji")
+# Sanji.prune_weights(0.2)
+#
+# Yonji = init_and_train(48, 6, 2000, 8, (4,5), 'GB', name="Yonji")
+# Yonji.prune_weights(0.2)
+#
+# Goji = init_and_train(48, 6, 2000, 8, (5,6), 'GB', name="Goji")
+# Goji.prune_weights(0.2)
+#
+# Rokiji = init_and_train(48, 6, 2000, 8, (6,7), 'GB', name="Rokiji")
+# Rokiji.prune_weights(0.2)
+#
+# Nanaji = init_and_train(48, 6, 2000, 8, (7,8), 'GB', name="Nanaji")
+# Nanaji.prune_weights(0.2)
+#
+# Hachiji = init_and_train(48, 6, 2000, 8, (8,9), 'GB', name="Hachiji")
+# Hachiji.prune_weights(0.2)
 
 
     # Ichiji = init_and_train(48, 6, 2000, 6, (1,1), 'GB', name="Ichiji")
