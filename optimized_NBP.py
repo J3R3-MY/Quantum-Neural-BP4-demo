@@ -1064,21 +1064,29 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 
 boosting = False
 
-# Ichiji = init_and_train(48, 6, 2000, 6, (1,2), 'GB', name="Ichiji")
-#
-# Niji = init_and_train(48, 6, 2000, 6, (2,3), 'GB', name="Niji")
-#
-# Sanji = init_and_train(48, 6, 2000, 6, (3,4), 'GB', name="Sanji")
-#
-# Yonji = init_and_train(48, 6, 2000, 6, (4,5), 'GB', name="Yonji")
+Ichiji = init_and_train(48, 6, 2000, 8, (1,2), 'GB', name="Ichiji")
+Ichiji.prune(0.2)
 
-Goji = init_and_train(48, 6, 2000, 6, (5,6), 'GB', name="Goji")
+Niji = init_and_train(48, 6, 2000, 8, (2,3), 'GB', name="Niji")
+Niji.prune(0.2)
 
-Rokiji = init_and_train(48, 6, 2000, 6, (6,7), 'GB', name="Rokiji")
+Sanji = init_and_train(48, 6, 2000, 8, (3,4), 'GB', name="Sanji")
+Sanji.prune_weights(0.2)
 
-Nanaji = init_and_train(48, 6, 2000, 6, (7,8), 'GB', name="Nanaji")
+Yonji = init_and_train(48, 6, 2000, 8, (4,5), 'GB', name="Yonji")
+Yonji.prune_weights(0.2)
 
-Hachiji = init_and_train(48, 6, 2000, 6, (8,9), 'GB', name="Hachiji")
+Goji = init_and_train(48, 6, 2000, 8, (5,6), 'GB', name="Goji")
+Goji.prune_weights(0.2)
+
+Rokiji = init_and_train(48, 6, 2000, 8, (6,7), 'GB', name="Rokiji")
+Rokiji.prune_weights(0.2)
+
+Nanaji = init_and_train(48, 6, 2000, 8, (7,8), 'GB', name="Nanaji")
+Nanaji.prune_weights(0.2)
+
+Hachiji = init_and_train(48, 6, 2000, 8, (8,9), 'GB', name="Hachiji")
+Hachiji.prune_weights(0.2)
 
 
     # Ichiji = init_and_train(48, 6, 2000, 6, (1,1), 'GB', name="Ichiji")
