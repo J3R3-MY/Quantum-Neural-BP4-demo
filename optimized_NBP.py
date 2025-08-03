@@ -918,7 +918,7 @@ def train(NBP_dec:NBP_oc):
             NBP_dec.parameters(),
             lr=lr
         )
-        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=1.0, end_factor=0.1, total_iters=1200)
+        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=1.0, end_factor=0.1, total_iters=120)
     print('--- Training Metadata ---')
     print(f'Code: n={NBP_dec.n}, k={NBP_dec.k}, PCM rows={NBP_dec.m1},{NBP_dec.m2}')
     print(f'device: {NBP_dec.device}')
@@ -1082,28 +1082,28 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 
 boosting = False
 
-TorIchi = init_and_train(128, 2, 384, 18, (1,2), 'toric', name="TorIchi")
+TorIchi = init_and_train(128, 2, 384, 25, (1,2), 'toric', name="TorIchi")
 # TorIchi.prune_weights(0.2)
 
-TorNi = init_and_train(128, 2, 384, 18, (2,3), 'toric', name="TorNi")
+TorNi = init_and_train(128, 2, 384, 25, (2,3), 'toric', name="TorNi")
 # TorNi.prune_weights(0.2)
 
-TorSan = init_and_train(128, 2, 384, 18, (3,4), 'toric', name="TorSan")
+TorSan = init_and_train(128, 2, 384, 25, (3,4), 'toric', name="TorSan")
 # TorSan.prune_weights(0.2)
 
-TorYon = init_and_train(128, 2, 384, 18, (4,5), 'toric', name="TorYon")
+TorYon = init_and_train(128, 2, 384, 25, (4,5), 'toric', name="TorYon")
 # TorYon.prune_weights(0.2)
 
-TorGo = init_and_train(128, 2, 384, 18, (5,6), 'toric', name="TorGo")
+TorGo = init_and_train(128, 2, 384, 25, (5,6), 'toric', name="TorGo")
 # TorGo.prune_weights(0.2)
 
-TorRoku = init_and_train(128, 2, 384, 18, (6,7), 'toric', name="TorRoku")
+TorRoku = init_and_train(128, 2, 384, 25, (6,7), 'toric', name="TorRoku")
 # TorRoku.prune_weights(0.2)
 
-TorNana = init_and_train(128, 2, 384, 18, (7,8), 'toric', name="TorNana")
+TorNana = init_and_train(128, 2, 384, 25, (7,8), 'toric', name="TorNana")
 # TorNana.prune_weights(0.2)
 
-TorHachi = init_and_train(128, 2, 384, 18, (8,9), 'toric', name="TorHachi")
+TorHachi = init_and_train(128, 2, 384, 25, (8,9), 'toric', name="TorHachi")
 # TorHachi.prune_weights(0.2)
 
 
