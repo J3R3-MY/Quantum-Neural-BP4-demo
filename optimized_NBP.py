@@ -847,27 +847,27 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
 
     idx = 0
     with tqdm(total=loss_length) as pbar:
-        # for i_batch in range(num_batch):
-        #     errorx = torch.tensor([])
-        #     errorz = torch.tensor([])
-        #     for i in range(num_points):
-        #         ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1+i*sep, decoder.batch_size//num_points)
-        #         errorx = torch.cat((errorx, ex), dim=0)
-        #         errorz = torch.cat((errorz, ez), dim=0)
-
-        #Try and add erorrs with a certain weight
         for i_batch in range(num_batch):
             errorx = torch.tensor([])
             errorz = torch.tensor([])
-            for w in range(r1, r2):
-                batch_subsize = decoder.batch_size // (r2 - r1 + 1)
-                ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
+            for i in range(num_points):
+                ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1 + i * sep, decoder.batch_size // num_points)
                 errorx = torch.cat((errorx, ex), dim=0)
                 errorz = torch.cat((errorz, ez), dim=0)
-            res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
-            ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
-            errorx = torch.cat((errorx, ex), dim=0)
-            errorz = torch.cat((errorz, ez), dim=0)
+
+        #Try and add erorrs with a certain weight
+        # for i_batch in range(num_batch):
+        #     errorx = torch.tensor([])
+        #     errorz = torch.tensor([])
+        #     for w in range(r1, r2):
+        #         batch_subsize = decoder.batch_size // (r2 - r1 + 1)
+        #         ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
+        #         errorx = torch.cat((errorx, ex), dim=0)
+        #         errorz = torch.cat((errorz, ez), dim=0)
+            # res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
+            # ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+            # errorx = torch.cat((errorx, ex), dim=0)
+            # errorz = torch.cat((errorz, ez), dim=0)
 
 
             loss[idx], loss_min[idx] = optimization_toric(decoder, ep0, optimizer, errorx, errorz, scheduler)
@@ -884,7 +884,7 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
 
     decoder.save_weights()
     print('Training completed.\n')
-    return loss_min
+    return loss
 
 def train(NBP_dec:NBP_oc):
 
@@ -898,16 +898,18 @@ def train(NBP_dec:NBP_oc):
         lr = 1
         torch.autograd.set_detect_anomaly(True)
         m = 3*NBP_dec.n  # number of checks, can also use 46 or 44
-        ep1=0.03
+        # ep1=0.03
+        ep0 = 0.45
+        ep1 = 0.05
         sep=0.01
         num_points = 6
-        if m==3*NBP_dec.n:
-            #ep0 = 0.37
-            ep0 = 0.49
-            ep1=0.06
+        # if m==3*NBP_dec.n:
+        #     #ep0 = 0.37
+        #     ep0 = 0.49
+        #     ep1=0.06
 
         # number of updates
-        n_batches = 200
+        n_batches = 100
 
 
     #trainable parameters
@@ -918,7 +920,7 @@ def train(NBP_dec:NBP_oc):
             NBP_dec.parameters(),
             lr=lr
         )
-        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=1.0, end_factor=0.1, total_iters=120)
+        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=1.0, end_factor=0.1, total_iters=1200)
     print('--- Training Metadata ---')
     print(f'Code: n={NBP_dec.n}, k={NBP_dec.k}, PCM rows={NBP_dec.m1},{NBP_dec.m2}')
     print(f'device: {NBP_dec.device}')
@@ -947,13 +949,15 @@ def train(NBP_dec:NBP_oc):
 
 
     elif (NBP_dec.codeType == 'toric'):
+
         # training stage
         loss = torch.Tensor()
         print("Plotting loss...")
-        loss_pre_train = training_toric(NBP_dec, optimizer, ep1, sep,num_points, ep0, n_batches, NBP_dec.path, scheduler=scheduler)
-        loss = torch.cat((loss, loss_pre_train), dim=0)
-        plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
-        plot_loss(loss_pre_train, NBP_dec.path)
+        for _ in range(20):
+            loss_pre_train = training_toric(NBP_dec, optimizer, ep1, sep,num_points, ep0, n_batches, NBP_dec.path, scheduler=scheduler)
+            loss = torch.cat((loss, loss_pre_train), dim=0)
+            plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
+            plot_loss(loss_pre_train, NBP_dec.path)
 
 
 def init_and_train(
@@ -1082,28 +1086,28 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 
 boosting = False
 
-TorIchi = init_and_train(128, 2, 384, 25, (1,2), 'toric', name="TorIchi")
+base = init_and_train(128, 2, 384, 18, (1,2), 'toric', name="base")
 # TorIchi.prune_weights(0.2)
 
-TorNi = init_and_train(128, 2, 384, 25, (2,3), 'toric', name="TorNi")
-# TorNi.prune_weights(0.2)
-
-TorSan = init_and_train(128, 2, 384, 25, (3,4), 'toric', name="TorSan")
-# TorSan.prune_weights(0.2)
-
-TorYon = init_and_train(128, 2, 384, 25, (4,5), 'toric', name="TorYon")
-# TorYon.prune_weights(0.2)
-
-TorGo = init_and_train(128, 2, 384, 25, (5,6), 'toric', name="TorGo")
-# TorGo.prune_weights(0.2)
-
-TorRoku = init_and_train(128, 2, 384, 25, (6,7), 'toric', name="TorRoku")
-# TorRoku.prune_weights(0.2)
-
-TorNana = init_and_train(128, 2, 384, 25, (7,8), 'toric', name="TorNana")
-# TorNana.prune_weights(0.2)
-
-TorHachi = init_and_train(128, 2, 384, 25, (8,9), 'toric', name="TorHachi")
+# TorNi = init_and_train(128, 2, 384, 25, (2,3), 'toric', name="TorNi")
+# # TorNi.prune_weights(0.2)
+#
+# TorSan = init_and_train(128, 2, 384, 25, (3,4), 'toric', name="TorSan")
+# # TorSan.prune_weights(0.2)
+#
+# TorYon = init_and_train(128, 2, 384, 25, (4,5), 'toric', name="TorYon")
+# # TorYon.prune_weights(0.2)
+#
+# TorGo = init_and_train(128, 2, 384, 25, (5,6), 'toric', name="TorGo")
+# # TorGo.prune_weights(0.2)
+#
+# TorRoku = init_and_train(128, 2, 384, 25, (6,7), 'toric', name="TorRoku")
+# # TorRoku.prune_weights(0.2)
+#
+# TorNana = init_and_train(128, 2, 384, 25, (7,8), 'toric', name="TorNana")
+# # TorNana.prune_weights(0.2)
+#
+# TorHachi = init_and_train(128, 2, 384, 25, (8,9), 'toric', name="TorHachi")
 # TorHachi.prune_weights(0.2)
 
 

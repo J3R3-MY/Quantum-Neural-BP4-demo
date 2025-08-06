@@ -18,40 +18,35 @@
 #include <vector>
 
 int main(int argc, char *argv[]) {
-    unsigned n = 48;
-    unsigned k = 6;
-    unsigned m = 2000;
+    unsigned n = 128;
+    unsigned k = 2;
+    unsigned m = 384;
 
-    int decIterNum = 6;
+    int decIterNum = 18;
     bool trained = true;
-    double ep0 = 0.3;
-    stabilizerCodesType codeType = stabilizerCodesType::GeneralizedBicycle;
+    double ep0 = 0.45;
+    stabilizerCodesType codeType = stabilizerCodesType::toric;
 		AttributesDecoder list(n, k, m, codeType, trained);
 		std::vector<std::string> decoder_names{"main"};
 
-    fileReader matrix_supplier(n, k, m, codeType, trained, "Vanilla");
-    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "Vanilla");
+    // fileReader matrix_supplier(n, k, m, codeType, trained, "Vanilla");
+    // fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "Vanilla");
+    fileReader matrix_supplier(n, k, m, codeType, trained, "baseline");
+    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "baseline");
     matrix_supplier.check_symplectic();
 
-    fileReader matrix_pruned1(n, k, m, codeType, trained, "Ichiji");
-    fileReader matrix_pruned2(n, k, m, codeType, trained, "Niji");
-    fileReader matrix_pruned3(n, k, m, codeType, trained, "Sanji");
-    fileReader matrix_pruned4(n, k, m, codeType, trained, "Yonji");
-    fileReader matrix_pruned5(n, k, m, codeType, trained, "Goji");
-    fileReader matrix_pruned6(n, k, m, codeType, trained, "Rokiji");
-    fileReader matrix_pruned7(n, k, m, codeType, trained, "Nanaji");
-    fileReader matrix_pruned8(n, k, m, codeType, trained, "Hachiji");
+    fileReader matrix_pruned1(n, k, m, codeType, trained, "baseline");
 
-
-    // fileReader high(n, k, m, codeType, trained, "NoWS");
-    // fileReader low(n, k, m, codeType, trained, "WS");
     //
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
     //    double ep_list[] =
     //    {0.14,0.13,0.12,0.11,0.1,0.09,0.08,0.07,0.06,0.05,0.04,0.03,0.02,0.01,0.009,0.008,0.007,0.006,0.005};
+    // const std::vector<double> default_ep_list{
+    //     0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01,
+    // };
     const std::vector<double> default_ep_list{
-        0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01,
+        0.15, 0.135, 0.12, 0.105, 0.09, 0.075, 0.06, 0.045,
     };
 
     const auto arguments =
@@ -86,23 +81,10 @@ int main(int argc, char *argv[]) {
          				ensembleDecoder dude(decoder_names, list, matrix_supplier);
 
 
-                stabilizerCodes ichi(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes ni(n, k, m, codeType, matrix_pruned2, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes san(n, k, m, codeType, matrix_pruned3, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes yo(n, k, m, codeType, matrix_pruned4, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes go(n, k, m, codeType, matrix_pruned5, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes roku(n, k, m, codeType, matrix_pruned6, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes nana(n, k, m, codeType, matrix_pruned7, trained, errorCreator.getErrorString(), errorCreator.getError());
-                stabilizerCodes hachi(n, k, m, codeType, matrix_pruned8, trained, errorCreator.getErrorString(), errorCreator.getError());
-                dude.add_decoder(ichi);
-                dude.add_decoder(ni);
-                dude.add_decoder(san);
-                dude.add_decoder(yo);
-                dude.add_decoder(go);
-                dude.add_decoder(roku);
-                dude.add_decoder(nana);
-                dude.add_decoder(hachi);
-								success = dude.decodeAllPaths(decIterNum, ep0);
+                stabilizerCodes base(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
+                dude.add_decoder(base);
+								// success = dude.decodeAllPaths(decIterNum, ep0);
+                success = dude.list_of_decoders[0].decode(decIterNum, ep0);
 
 								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
 								// 		success = dude.list_of_decoders[i].decode(decIterNum, ep0);
