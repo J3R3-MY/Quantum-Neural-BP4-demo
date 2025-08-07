@@ -22,22 +22,18 @@ int main(int argc, char *argv[]) {
     unsigned k = 2;
     unsigned m = 384;
 
-    int decIterNum = 18;
+    int decIterNum = 25;
     bool trained = true;
-    double ep0 = 0.45;
+    double ep0 = 0.4;
     stabilizerCodesType codeType = stabilizerCodesType::toric;
-		AttributesDecoder list(n, k, m, codeType, trained);
-		std::vector<std::string> decoder_names{"main"};
 
-    // fileReader matrix_supplier(n, k, m, codeType, trained, "Vanilla");
-    // fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "Vanilla");
     fileReader matrix_supplier(n, k, m, codeType, trained, "baseline");
     fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "baseline");
     matrix_supplier.check_symplectic();
 
-    fileReader matrix_pruned1(n, k, m, codeType, trained, "baseline");
+    fileReader matrix1(n, k, m, codeType, trained, "TorGo");
+    fileReader matrix2(n, k, m, codeType, trained, "TorRoku");
 
-    //
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
     //    double ep_list[] =
@@ -78,20 +74,24 @@ int main(int argc, char *argv[]) {
                 stabilizerCodes errorCreator(n, k, m, codeType, matrix_supplier_dummy, trained);
           			errorCreator.add_error_given_epsilon(epsilon);
 
-         				ensembleDecoder dude(decoder_names, list, matrix_supplier);
+         				ensembleDecoder dude;
+                stabilizerCodes base(n, k, m, codeType, matrix_supplier, trained);
+                stabilizerCodes five(n, k, m, codeType, matrix1, trained);
+                stabilizerCodes six(n, k, m, codeType, matrix2, trained);
 
 
-                stabilizerCodes base(n, k, m, codeType, matrix_pruned1, trained, errorCreator.getErrorString(), errorCreator.getError());
-                dude.add_decoder(base);
-								// success = dude.decodeAllPaths(decIterNum, ep0);
-                success = dude.list_of_decoders[0].decode(decIterNum, ep0);
+                // dude.add_decoder(base);
+                dude.add_decoder(five);
+                dude.add_decoder(six);
+                dude.setErrors(errorCreator.getErrorString(), errorCreator.getError());
+        				// success = dude.decodeAllPaths(decIterNum, ep0);
 
-								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
-								// 		success = dude.list_of_decoders[i].decode(decIterNum, ep0);
-								// 		if (success[1]) {
-								// 			break;
-								// 		}
-								// }
+								for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
+										success = dude.list_of_decoders[i]->decode(decIterNum, ep0);
+										if (success[1]) {
+											break;
+										}
+								}
         				
 #pragma omp critical
                 {

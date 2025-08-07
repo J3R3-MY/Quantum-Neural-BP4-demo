@@ -30,6 +30,8 @@ class stabilizerCodes {
     static inline bool trace_inner_product(unsigned a, unsigned b);
 
     void add_error_given_epsilon(double epsilon);
+
+    void set_error_given_epsilon(std::vector<std::string> errorString, std::vector<unsigned> error);
   	
   	std::vector<double> Taus;
 

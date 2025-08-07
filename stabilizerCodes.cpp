@@ -23,6 +23,7 @@ stabilizerCodes::stabilizerCodes(unsigned n, unsigned k, unsigned m, stabilizerC
     M = m;
     G_rows = N + K;
     mTrained = trained;
+    trained_iter = fr.trained_iter;
     dc = fr.dc;
     dv = fr.dv;
     maxDc = fr.maxDc;
@@ -50,6 +51,14 @@ std::vector<bool> stabilizerCodes::decode(unsigned int L, double epsilon) {
     calculate_syndrome();
     error_hat = std::vector<unsigned>(N, 0);
     return flooding_decode(L, epsilon);
+}
+
+void stabilizerCodes::set_error_given_epsilon(std::vector<std::string> FixedErrorString, std::vector<unsigned> FixedError){
+    error.clear();
+    errorString.clear();
+
+    error = FixedError;
+    errorString = FixedErrorString;
 }
 
 void stabilizerCodes::add_error_given_epsilon(double epsilon) {
