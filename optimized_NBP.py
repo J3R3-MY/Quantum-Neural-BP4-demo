@@ -39,7 +39,7 @@ class NBP_oc(nn.Module):
         #m is the number of rows of the full rank check matrix
         self.m = n - k
         self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) +"_" + str(self.name) + "/"
-        self.current_line = 0
+        self.specialize_counter = 0
         self.error_weights = error_weights
         #If True, then all outgoing edges on the same CN has the same weight, configurable
         if self.name == 'NoWS':
@@ -680,13 +680,11 @@ class NBP_oc(nn.Module):
         Prunes globally across all weights in self.weights_cn ParameterList.
         """
         parameters_to_prune = [(self.weights_cn, str(i)) for i in range(len(self.weights_cn))]
-        # print("Before pruning:", self.weights_cn[0].data)
         prune.global_unstructured(
             parameters_to_prune,
             pruning_method=prune.L1Unstructured,
             amount=amount,
         )
-        # print("After pruning:", self.weights_cn[0].data)
 
         print(type(self.weights_cn))
         print([type(p) for p in self.weights_cn])
@@ -767,32 +765,6 @@ def optimization_toric(decoder: NBP_oc, ep0, optimizer: torch.optim.Optimizer, e
 
     return loss.detach(), loss_min.detach()
 
-def BoostingTraining(decoder: NBP_oc, errorx, errorz, subsize):
-    """
-    Creates errors from .txt file to enable model to learn from the mistakes of its predecessors
-    """
-    if(decoder.name == "Tick"):
-        print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('2b-forTick.txt')
-        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
-
-
-    if(decoder.name == "Trick"):
-        print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('2b-forTrick.txt')
-        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
-
-    if(decoder.name == "Track"):
-        print("Training on others mistakes...")
-        patterns = load_tokenized_error_lines('2b-forTrack.txt')
-        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
-
-
-    errorx = torch.cat((errorx, ex), dim=0)
-    errorz = torch.cat((errorz, ez), dim=0)
-
-    return errorx, errorz
-
 def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0, num_batch, path):
     print(f'training on random errors, weight from {r1} to {r2} ')
     loss_length = num_batch
@@ -803,18 +775,15 @@ def training_loop(decoder: NBP_oc, optimizer: torch.optim.Optimizer, r1, r2, ep0
         for i_batch in range(num_batch):
             errorx = torch.tensor([])
             errorz = torch.tensor([])
-            if (not boosting):
-                for w in range(r1, r2):
-                    batch_subsize = decoder.batch_size // (r2 - r1 + 1)
-                    ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
-                    errorx = torch.cat((errorx, ex), dim=0)
-                    errorz = torch.cat((errorz, ez), dim=0)
-                res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
-                ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+            for w in range(r1, r2):
+                batch_subsize = decoder.batch_size // (r2 - r1 + 1)
+                ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
                 errorx = torch.cat((errorx, ex), dim=0)
                 errorz = torch.cat((errorz, ez), dim=0)
-            else:
-                errorx, errorz = BoostingTraining(decoder, errorx, errorz, decoder.batch_size)
+            res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
+            ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
+            errorx = torch.cat((errorx, ex), dim=0)
+            errorz = torch.cat((errorz, ez), dim=0)
 
 
             loss[idx]= optimization_step(decoder, ep0, optimizer, errorx, errorz)
@@ -848,27 +817,26 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
     idx = 0
     with tqdm(total=loss_length) as pbar:
         for i_batch in range(num_batch):
-            errorx = torch.tensor([])
-            errorz = torch.tensor([])
-            for i in range(num_points):
-                ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1 + i * sep, decoder.batch_size // num_points)
+            if decoder.specialize_counter % 3 == 0 or decoder.name == "base":
+                errorx = torch.tensor([])
+                errorz = torch.tensor([])
+                for i in range(num_points):
+                    ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1 + i * sep, decoder.batch_size // num_points)
+                    errorx = torch.cat((errorx, ex), dim=0)
+                    errorz = torch.cat((errorz, ez), dim=0)
+            else:
+                # Try and add errors with a certain weight
+                errorx = torch.tensor([])
+                errorz = torch.tensor([])
+                for w in range(r1, r2):
+                    batch_subsize = decoder.batch_size // (r2 - r1 + 1)
+                    ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
+                    errorx = torch.cat((errorx, ex), dim=0)
+                    errorz = torch.cat((errorz, ez), dim=0)
+                res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
+                ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
                 errorx = torch.cat((errorx, ex), dim=0)
                 errorz = torch.cat((errorz, ez), dim=0)
-
-        #Try and add erorrs with a certain weight
-        # for i_batch in range(num_batch):
-        #     errorx = torch.tensor([])
-        #     errorz = torch.tensor([])
-        #     for w in range(r1, r2):
-        #         batch_subsize = decoder.batch_size // (r2 - r1 + 1)
-        #         ex, ez = addErrorGivenWeight(decoder.n, w, batch_subsize)
-        #         errorx = torch.cat((errorx, ex), dim=0)
-        #         errorz = torch.cat((errorz, ez), dim=0)
-            # res_size = decoder.batch_size - ((decoder.batch_size // (r2 - r1 + 1)) * (r2 - r1))
-            # ex, ez = addErrorGivenWeight(decoder.n, r2, res_size)
-            # errorx = torch.cat((errorx, ex), dim=0)
-            # errorz = torch.cat((errorz, ez), dim=0)
-
 
             loss[idx], loss_min[idx] = optimization_toric(decoder, ep0, optimizer, errorx, errorz, scheduler)
             pbar.update(1)
@@ -877,12 +845,12 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
             pbar.set_description(f"loss {loss[idx]:.2f}, loss min {loss_min[idx]:.2f}, lr(s): {lr_str}")
             idx += 1
 
-
             if ((i_batch+1)%100==0):
                 decoder.save_weights()
                 plot_loss(loss_min[0:idx-1], path=None)
 
     decoder.save_weights()
+    decoder.specialize_counter += 1
     print('Training completed.\n')
     return loss
 
@@ -953,11 +921,15 @@ def train(NBP_dec:NBP_oc):
         # training stage
         loss = torch.Tensor()
         print("Plotting loss...")
+        cpp_executable = './check'
+        
         for _ in range(20):
             loss_pre_train = training_toric(NBP_dec, optimizer, ep1, sep,num_points, ep0, n_batches, NBP_dec.path, scheduler=scheduler)
             loss = torch.cat((loss, loss_pre_train), dim=0)
             plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
             plot_loss(loss_pre_train, NBP_dec.path)
+            if NBP_dec.name == "base":
+                subprocess.call([cpp_executable])
 
 
 def init_and_train(
@@ -1019,58 +991,9 @@ def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
     return errorx, errorz
 
 
-def addErrorfromEnsemble(n: int, lines_tokenized: list, batch_size: int = 1, start_line: int = 0):
-    """
-    lines_tokenized: list of lists, each inner list contains tokens for a line (e.g. ['X5', 'Y7', 'Z11'])
-    Returns (errorx, errorz, next_line).
-    """
-    errorx = torch.zeros((batch_size, n))
-    errorz = torch.zeros((batch_size, n))
-    end_line = min(start_line + batch_size, len(lines_tokenized))
-    for b, idx in enumerate(range(start_line, end_line)):
-        tokens = lines_tokenized[idx]
-        for token in tokens:
-            if token and token[0] in 'XYZxyz':
-                try:
-                    pos = int(token[1:])
-                except Exception:
-                    continue
-                if 0 <= pos < n:
-                    if token[0] in 'Xx':
-                        errorx[b, pos] = 1
-                    if token[0] in 'Zz':
-                        errorz[b, pos] = 1
-                    if token[0] in 'Yy':
-                        errorx[b, pos] = 1
-                        errorz[b, pos] = 1
-    return errorx, errorz, end_line
-
-def load_tokenized_error_lines(txt_path: str):
-    """
-    Loads lines from a txt file, removes any trailing float, splits into tokens.
-    Returns a list of lists of tokens.
-    """
-    lines_tokenized = []
-    with open(txt_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split()
-            # Remove trailing float if present
-            try:
-                float(parts[-1])
-                if len(parts) > 1:
-                    parts = parts[:-1]
-            except Exception:
-                pass
-            lines_tokenized.append(parts)
-    return lines_tokenized
-
-
 # give parameters for the code and decoder
-trials = [1, 2, 3, 4, 5, 6, 7]
-percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
+# trials = [1, 2, 3, 4, 5, 6, 7]
+# percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 # percentage = [0.02, 0.04, 0.08, 0.16, 0.32]
 
 # for num in trials:
@@ -1084,10 +1007,15 @@ percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
 #             NBP_decoder.prune_weights(percent)
 #             train(NBP_decoder)
 
-boosting = False
 
-base = init_and_train(128, 2, 384, 18, (1,2), 'toric', name="base")
-# TorIchi.prune_weights(0.2)
+base = init_and_train(128, 2, 384, 18, (1,8), 'toric', name="base")
+
+five = init_and_train(128, 2, 384, 18, (5,6), 'toric', name="defRoku")
+
+six = init_and_train(128, 2, 384, 18, (4,5), 'toric', name="defGo")
+
+# drop = init_and_train(128, 2, 384, 18, (4,7), 'toric', name="defDrop")
+# drop.prune_weights(0.2)
 
 # TorNi = init_and_train(128, 2, 384, 25, (2,3), 'toric', name="TorNi")
 # # TorNi.prune_weights(0.2)

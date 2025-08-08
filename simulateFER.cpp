@@ -27,8 +27,8 @@ int main(int argc, char *argv[]) {
     double ep0 = 0.4;
     stabilizerCodesType codeType = stabilizerCodesType::toric;
 
-    fileReader matrix_supplier(n, k, m, codeType, trained, "baseline");
-    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "baseline");
+    fileReader matrix_supplier(n, k, m, codeType, trained, "base");
+    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "base");
     matrix_supplier.check_symplectic();
 
     fileReader matrix1(n, k, m, codeType, trained, "TorGo");
@@ -80,18 +80,18 @@ int main(int argc, char *argv[]) {
                 stabilizerCodes six(n, k, m, codeType, matrix2, trained);
 
 
-                // dude.add_decoder(base);
-                dude.add_decoder(five);
-                dude.add_decoder(six);
+                dude.add_decoder(base);
+                // dude.add_decoder(five);
+                // dude.add_decoder(six);
                 dude.setErrors(errorCreator.getErrorString(), errorCreator.getError());
-        				// success = dude.decodeAllPaths(decIterNum, ep0);
+        				success = dude.decodeAllPaths(decIterNum, ep0);
 
-								for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
-										success = dude.list_of_decoders[i]->decode(decIterNum, ep0);
-										if (success[1]) {
-											break;
-										}
-								}
+								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
+								// 		success = dude.list_of_decoders[i]->decode(decIterNum, ep0);
+								// 		if (success[1]) {
+								// 			break;
+								// 		}
+								// }
         				
 #pragma omp critical
                 {
