@@ -857,7 +857,7 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
     decoder.save_weights()
     decoder.specialize_counter += 1
     print('Training completed.\n')
-    return loss
+    return loss_min
 
 def train(NBP_dec:NBP_oc, params):
 
@@ -872,8 +872,10 @@ def train(NBP_dec:NBP_oc, params):
         torch.autograd.set_detect_anomaly(True)
         # m = 3*NBP_dec.n  # number of checks, can also use 46 or 44
         # ep1=0.03
-        ep0 = 0.45
-        ep1 = 0.05
+        # ep0 = 0.45
+        # ep1 = 0.05
+        ep0 = params['epsilon0']
+        ep1 = params['epsilon1']
         sep=0.01
         num_points = params['num_points']
         # if m==3*NBP_dec.n:
@@ -1015,10 +1017,12 @@ class OptunaOptimizer:
         """Suggest hyperparameters based on code type"""
         if code_type == 'toric':
             return {
-                'batch_size': trial.suggest_categorical('batch_size', [60, 80, 100, 120, 140, 160]),
-                'num_batch': trial.suggest_int('num_batch', 50, 200),
-                'learning_rate': trial.suggest_float('learning_rate', 0.1, 1.0, step = 0.1),
-                'num_points': trial.suggest_int('num_points', 4, 10)
+                "batch_size": trial.suggest_categorical("batch_size", [60, 80, 100, 120, 140, 160]),
+                "num_batch": trial.suggest_int("num_batch", 50, 200, step=5),
+                "learning_rate": trial.suggest_float("learning_rate", 0.1, 1.0, step=0.1),
+                "num_points": trial.suggest_int("num_points", 4, 10),
+                "epsilon0": trial.suggest_float("epsilon0", 0.3, 0.6, step=0.025),
+                "epsilon1": trial.suggest_float("epsilon1", 0.04, 0.06, step=0.01),
             }
         else:  # GB
             return {

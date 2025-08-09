@@ -27,12 +27,12 @@ int main(int argc, char *argv[]) {
     double ep0 = 0.4;
     stabilizerCodesType codeType = stabilizerCodesType::toric;
 
-    fileReader matrix_supplier(n, k, m, codeType, trained, "base");
-    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "base");
+    fileReader matrix_supplier(n, k, m, codeType, trained, "optuna");
+    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "optuna");
     matrix_supplier.check_symplectic();
 
-    fileReader matrix1(n, k, m, codeType, trained, "TorGo");
-    fileReader matrix2(n, k, m, codeType, trained, "TorRoku");
+    // fileReader matrix1(n, k, m, codeType, trained, "TorGo");
+    // fileReader matrix2(n, k, m, codeType, trained, "TorRoku");
 
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
@@ -76,8 +76,8 @@ int main(int argc, char *argv[]) {
 
          				ensembleDecoder dude;
                 stabilizerCodes base(n, k, m, codeType, matrix_supplier, trained);
-                stabilizerCodes five(n, k, m, codeType, matrix1, trained);
-                stabilizerCodes six(n, k, m, codeType, matrix2, trained);
+                // stabilizerCodes five(n, k, m, codeType, matrix1, trained);
+                // stabilizerCodes six(n, k, m, codeType, matrix2, trained);
 
 
                 dude.add_decoder(base);
