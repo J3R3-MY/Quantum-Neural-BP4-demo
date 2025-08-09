@@ -52,6 +52,7 @@ class NBP_oc(nn.Module):
 
         self.xhat = torch.zeros((batch_size, self.n))
         self.zhat = torch.zeros((batch_size, self.n))
+        self.final_loss = 0
         self.load_matrices()
 
         if not folder_weights:
@@ -819,7 +820,7 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
     idx = 0
     with tqdm(total=loss_length) as pbar:
         for i_batch in range(num_batch):
-            if decoder.specialize_counter % 3 == 0 or decoder.name == "base":
+            if True:
                 errorx = torch.tensor([])
                 errorz = torch.tensor([])
                 for i in range(num_points):
@@ -851,12 +852,14 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
                 decoder.save_weights()
                 plot_loss(loss_min[0:idx-1], path=None)
 
+            decoder.final_loss = loss_min[idx-1]
+
     decoder.save_weights()
     decoder.specialize_counter += 1
     print('Training completed.\n')
     return loss
 
-def train(NBP_dec:NBP_oc):
+def train(NBP_dec:NBP_oc, params):
 
     if(NBP_dec.codeType == 'GB'):
         lr = 0.001
@@ -865,21 +868,21 @@ def train(NBP_dec:NBP_oc):
         # number of updates
         n_batches = 1500
     elif(NBP_dec.codeType == 'toric'):
-        lr = 1
+        lr = params['learning_rate']
         torch.autograd.set_detect_anomaly(True)
-        m = 3*NBP_dec.n  # number of checks, can also use 46 or 44
+        # m = 3*NBP_dec.n  # number of checks, can also use 46 or 44
         # ep1=0.03
         ep0 = 0.45
         ep1 = 0.05
         sep=0.01
-        num_points = 6
+        num_points = params['num_points']
         # if m==3*NBP_dec.n:
         #     #ep0 = 0.37
         #     ep0 = 0.49
         #     ep1=0.06
 
         # number of updates
-        n_batches = 100
+        n_batches = params['num_batch']
 
 
     #trainable parameters
@@ -890,7 +893,7 @@ def train(NBP_dec:NBP_oc):
             NBP_dec.parameters(),
             lr=lr
         )
-        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=1.0, end_factor=0.1, total_iters=1200)
+        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=params['learning_rate'], end_factor=0.1, total_iters=1200)
     print('--- Training Metadata ---')
     print(f'Code: n={NBP_dec.n}, k={NBP_dec.k}, PCM rows={NBP_dec.m1},{NBP_dec.m2}')
     print(f'device: {NBP_dec.device}')
@@ -930,8 +933,7 @@ def train(NBP_dec:NBP_oc):
             loss = torch.cat((loss, loss_pre_train), dim=0)
             plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
             plot_loss(loss_pre_train, NBP_dec.path)
-            if NBP_dec.name == "base":
-                subprocess.call([cpp_executable])
+            subprocess.call([cpp_executable])
 
 
 def init_and_train(
@@ -941,6 +943,7 @@ def init_and_train(
     n_iterations: int,
     error_weights: tuple,
     codeType: str,
+    params,
     use_pretrained_weights: bool = False,
     name: str = "default",
 ):
@@ -954,13 +957,21 @@ def init_and_train(
         batch_size = 120
     elif(codeType == 'toric'):
         #number of error patterns in each mini batch
-        num_points = 6
-        batch_size = 20*num_points
+        # num_points = 6
+        # batch_size = 20*num_points
 
+        num_points = params['num_points']
+        requested_batch_size = params['batch_size']
+        batch_size = (requested_batch_size // num_points) * num_points
+        if batch_size == 0:
+            batch_size = num_points
+        if batch_size != requested_batch_size:
+            print("Attention! batch_size changed!")
+            print(f"New batch size: {batch_size}")
 
     decoder = NBP_oc(n, k, m, m1,m2, codeType, n_iterations, error_weights, use_pretrained_weights, name, batch_size)
 
-    train(decoder)
+    train(decoder, params)
 
     return decoder
 
@@ -992,64 +1003,73 @@ def addErrorGivenWeight(n:int, w:int, batch_size:int = 1):
                 errorz[b,p] = 1
     return errorx, errorz
 
+import optuna
+from typing import Dict, Any, Optional
 
-# give parameters for the code and decoder
-# trials = [1, 2, 3, 4, 5, 6, 7]
-# percentage = [0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128, 0.256, 0.512]
-# percentage = [0.02, 0.04, 0.08, 0.16, 0.32]
+class OptunaOptimizer:
+    def __init__(self, study_name: str = "nbp_optimization", storage: Optional[str] = None):
+        self.study_name = study_name
+        self.storage = storage
+        
+    def suggest_params(self, trial: optuna.Trial, code_type: str) -> Dict[str, Any]:
+        """Suggest hyperparameters based on code type"""
+        if code_type == 'toric':
+            return {
+                'batch_size': trial.suggest_categorical('batch_size', [60, 80, 100, 120, 140, 160]),
+                'num_batch': trial.suggest_int('num_batch', 50, 200),
+                'learning_rate': trial.suggest_float('learning_rate', 0.1, 1.0, step = 0.1),
+                'num_points': trial.suggest_int('num_points', 4, 10)
+            }
+        else:  # GB
+            return {
+                'batch_size': trial.suggest_categorical('batch_size', [60, 80, 100, 120, 140, 160, 200, 240]),
+                'num_batch': trial.suggest_int('num_batch', 750, 3000),
+                'learning_rate': trial.suggest_float('learning_rate', 0.0001, 0.01, log=True)
+            }
+    
+    def objective(self, trial: optuna.Trial, n: int, k: int, m: int, code_type: str, 
+                  n_iterations: int, error_weights: tuple) -> float:
+        """Objective function for Optuna optimization"""
+        params = self.suggest_params(trial, code_type)
+        
+        # Create decoder with suggested parameters
+        decoder = init_and_train(n, k, m, n_iterations, error_weights, 
+                                           code_type, params, name = "optuna")
+        
+        # Train and return loss
+        final_loss = decoder.final_loss
+        return final_loss
+    
+    def optimize(self, n_trials: int, **kwargs) -> optuna.Study:
+        """Run optimization study"""
+        study = optuna.create_study(
+            direction="minimize",
+            study_name=self.study_name,
+            storage=self.storage,
+            load_if_exists=True
+        )
+        
+        study.optimize(
+            lambda trial: self.objective(trial, **kwargs),
+            n_trials=n_trials
+        )
+        
+        return study
 
-# for num in trials:
-#     for percent in percentage:
-#         specifier = f"{num}_{percent}"
-#         print(specifier)
-#         NBP_decoder = init_and_train(128, 2, 384, 18, 'toric', name = specifier)
-#         for value in range(1, num+1):
-#             print("Here we go again...")
-#             print(num)
-#             NBP_decoder.prune_weights(percent)
-#             train(NBP_decoder)
+# Usage example:
+def run_optimization():
+    optimizer = OptunaOptimizer("toric_optimization")
+    
+    study = optimizer.optimize(
+        n_trials=50,
+        n=128, k=2, m=384, code_type='toric',
+        n_iterations=18, error_weights=(4,7)
+    )
+    
+    print("Best parameters:", study.best_params)
+    print("Best loss:", study.best_value)
 
-
-base = init_and_train(128, 2, 384, 18, (1,8), 'toric', name="base")
-
-five = init_and_train(128, 2, 384, 18, (5,6), 'toric', name="defRoku")
-
-six = init_and_train(128, 2, 384, 18, (4,5), 'toric', name="defGo")
-
-# drop = init_and_train(128, 2, 384, 18, (4,7), 'toric', name="defDrop")
-# drop.prune_weights(0.2)
-
-# TorNi = init_and_train(128, 2, 384, 25, (2,3), 'toric', name="TorNi")
-# # TorNi.prune_weights(0.2)
-#
-# TorSan = init_and_train(128, 2, 384, 25, (3,4), 'toric', name="TorSan")
-# # TorSan.prune_weights(0.2)
-#
-# TorYon = init_and_train(128, 2, 384, 25, (4,5), 'toric', name="TorYon")
-# # TorYon.prune_weights(0.2)
-#
-# TorGo = init_and_train(128, 2, 384, 25, (5,6), 'toric', name="TorGo")
-# # TorGo.prune_weights(0.2)
-#
-# TorRoku = init_and_train(128, 2, 384, 25, (6,7), 'toric', name="TorRoku")
-# # TorRoku.prune_weights(0.2)
-#
-# TorNana = init_and_train(128, 2, 384, 25, (7,8), 'toric', name="TorNana")
-# # TorNana.prune_weights(0.2)
-#
-# TorHachi = init_and_train(128, 2, 384, 25, (8,9), 'toric', name="TorHachi")
-# TorHachi.prune_weights(0.2)
-
-
-    # Ichiji = init_and_train(48, 6, 2000, 6, (1,1), 'GB', name="Ichiji")
-    #
-    # Niji = init_and_train(48, 6, 2000, 6, (2,2), 'GB', name="Niji")
-    #
-    # Sanji = init_and_train(48, 6, 2000, 6, (3,3), 'GB', name="Sanji")
-    #
-    # Yonji = init_and_train(48, 6, 2000, 6, (4,4), 'GB', name="Yonji")
-
-
+run_optimization()
 
 print("Training and pruning completed.\n")
 
