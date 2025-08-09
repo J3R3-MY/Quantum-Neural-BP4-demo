@@ -437,6 +437,7 @@ class NBP_oc(nn.Module):
             self.k) + "/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_Gz.alist"
         Gx = readAlist(file_nameGx)
         Gz = readAlist(file_nameGz)
+        self.G_rows = 2*Gx.shape[0]
 
         file_nameH = "./PCMs/" + self.codeType + "_" + str(self.n) + "_" + str(
             self.k) + "/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_H_" + str(self.m_oc) + ".alist"
@@ -447,15 +448,16 @@ class NBP_oc(nn.Module):
         Hz = H[self.m1:self.m_oc, :]
         Gx = torch.from_numpy(Gx).float()
         Gz = torch.from_numpy(Gz).float()
+        G = torch.cat((Gx,Gz),dim=0)
         Hx = torch.from_numpy(Hx).float()
         Hz = torch.from_numpy(Hz).float()
-
 
         # first dim for batches.
         self.Hx = self.unsqueeze_batches(Hx).float().to(self.device)
         self.Hz = self.unsqueeze_batches(Hz).float().to(self.device)
         self.Gx = self.unsqueeze_batches(Gx).float().to(self.device)
         self.Gz = self.unsqueeze_batches(Gz).float().to(self.device)
+        self.G = self.unsqueeze_batches(G).float().to(self.device)
 
         self.H = torch.cat((self.Hx, self.Hz), dim=1).float().to(self.device)
         self.H_reverse = 1 - self.H
