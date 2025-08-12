@@ -935,8 +935,9 @@ def train(NBP_dec:NBP_oc, params):
             loss = torch.cat((loss, loss_pre_train), dim=0)
             plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
             plot_loss(loss_pre_train, NBP_dec.path)
-            subprocess.call([cpp_executable])
 
+        for _ in range(5):
+            subprocess.call([cpp_executable])
 
 def init_and_train(
     n: int,
@@ -945,7 +946,7 @@ def init_and_train(
     n_iterations: int,
     error_weights: tuple,
     codeType: str,
-    params,
+    params: dict,
     use_pretrained_weights: bool = False,
     name: str = "default",
 ):
@@ -1073,7 +1074,65 @@ def run_optimization():
     print("Best parameters:", study.best_params)
     print("Best loss:", study.best_value)
 
-run_optimization()
+# Training parameter configurations
+training_configs = [
+    {
+        'name': 'low_complexity_fast',
+        'params': {
+            'batch_size': 100,
+            'num_batch': 165,
+            'learning_rate': 0.2,
+            'num_points': 3,
+            'epsilon0': 0.57,
+            'epsilon1': 0.06
+        }
+    },
+    {
+        'name': 'medium_complexity_balanced',
+        'params': {
+            'batch_size': 140,
+            'num_batch': 200,
+            'learning_rate': 1,
+            'num_points': 6,
+            'epsilon0': 0.375,
+            'epsilon1': 0.06
+        }
+    },
+    {
+        'name': 'high_complexity_precise',
+        'params': {
+            'batch_size': 160,
+            'num_batch': 175,
+            'learning_rate': 0.9,
+            'num_points': 9,
+            'epsilon0': 0.57,
+            'epsilon1': 0.05
+        }
+    },
+    {
+        'name': 'quick_validation',
+        'params': {
+            'batch_size': 100,
+            'num_batch': 50,
+            'learning_rate': 1,
+            'num_points': 4,
+            'epsilon0': 0.4,
+            'epsilon1': 0.06
+        }
+    }
+]
+
+# Train with all configurations
+for config in training_configs:
+    print(f"Training {config['name']}...")
+    decoder = init_and_train(
+        n=128, k=2, m=384, 
+        n_iterations=18, 
+        error_weights=(4,7),
+        codeType='toric',
+        params=config['params'],
+        name="optuna"
+    )
 
 print("Training and pruning completed.\n")
 
