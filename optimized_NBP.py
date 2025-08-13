@@ -820,7 +820,7 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
     idx = 0
     with tqdm(total=loss_length) as pbar:
         for i_batch in range(num_batch):
-            if True:
+            if decoder.specialize_counter%3 == 0 or decoder.name == "optimized-baseline":
                 errorx = torch.tensor([])
                 errorz = torch.tensor([])
                 for i in range(num_points):
@@ -928,16 +928,14 @@ def train(NBP_dec:NBP_oc, params):
         # training stage
         loss = torch.Tensor()
         print("Plotting loss...")
-        cpp_executable = './check'
+        cpp_executable = './' + str(decoder.name)
         
-        for _ in range(20):
-            loss_pre_train = training_toric(NBP_dec, optimizer, ep1, sep,num_points, ep0, n_batches, NBP_dec.path, scheduler=scheduler)
-            loss = torch.cat((loss, loss_pre_train), dim=0)
-            plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
-            plot_loss(loss_pre_train, NBP_dec.path)
+        loss_pre_train = training_toric(NBP_dec, optimizer, ep1, sep,num_points, ep0, n_batches, NBP_dec.path, scheduler=scheduler)
+        loss = torch.cat((loss, loss_pre_train), dim=0)
+        plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
+        plot_loss(loss_pre_train, NBP_dec.path)
 
-        for _ in range(5):
-            subprocess.call([cpp_executable])
+        subprocess.call([cpp_executable])
 
 def init_and_train(
     n: int,
@@ -1077,6 +1075,7 @@ def run_optimization():
 # Training parameter configurations
 training_configs = [
     {
+        #best performance
         'name': 'low_complexity_fast',
         'params': {
             'batch_size': 100,
@@ -1123,16 +1122,32 @@ training_configs = [
 ]
 
 # Train with all configurations
-for config in training_configs:
-    print(f"Training {config['name']}...")
-    decoder = init_and_train(
-        n=128, k=2, m=384, 
-        n_iterations=18, 
-        error_weights=(4,7),
-        codeType='toric',
-        params=config['params'],
-        name="optuna"
-    )
+decoder = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(4,7),
+    codeType='toric',
+    params=training_configs['low_complexity_fast'],
+    name="optimized-baseline"
+)
+
+decoder = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(5,6),
+    codeType='toric',
+    params=training_configs['low_complexity_fast'],
+    name="spec-five-weight"
+)
+
+decoder = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(6,7),
+    codeType='toric',
+    params=training_configs['low_complexity_fast'],
+    name="spec-six-weight"
+)
 
 print("Training and pruning completed.\n")
 

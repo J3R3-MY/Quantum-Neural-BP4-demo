@@ -27,8 +27,8 @@ int main(int argc, char *argv[]) {
     double ep0 = 0.4;
     stabilizerCodesType codeType = stabilizerCodesType::toric;
 
-    fileReader matrix_supplier(n, k, m, codeType, trained, "optuna");
-    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "optuna");
+    fileReader matrix_supplier(n, k, m, codeType, trained, "optimized-baseline");
+    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "optimized-baseline");
     matrix_supplier.check_symplectic();
 
     // fileReader matrix1(n, k, m, codeType, trained, "TorGo");
