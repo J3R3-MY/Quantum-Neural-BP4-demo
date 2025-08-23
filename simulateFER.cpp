@@ -18,32 +18,32 @@
 #include <vector>
 
 int main(int argc, char *argv[]) {
-    unsigned n = 128;
+    unsigned n = 72;
     unsigned k = 2;
-    unsigned m = 384;
+    unsigned m = 216;
 
     int decIterNum = 25;
     bool trained = true;
     double ep0 = 0.4;
     stabilizerCodesType codeType = stabilizerCodesType::toric;
 
-    fileReader matrix_supplier(n, k, m, codeType, trained, "optimized-baseline");
-    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "optimized-baseline");
+    fileReader matrix_supplier(n, k, m, codeType, trained, "baseline-noopt");
+    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "baseline-noopt");
     matrix_supplier.check_symplectic();
 
-    // fileReader matrix1(n, k, m, codeType, trained, "TorGo");
-    // fileReader matrix2(n, k, m, codeType, trained, "TorRoku");
+    fileReader matrix1(n, k, m, codeType, trained, "hamming-one");
+    fileReader matrix2(n, k, m, codeType, trained, "hamming-two");
 
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
     //    double ep_list[] =
     //    {0.14,0.13,0.12,0.11,0.1,0.09,0.08,0.07,0.06,0.05,0.04,0.03,0.02,0.01,0.009,0.008,0.007,0.006,0.005};
-    // const std::vector<double> default_ep_list{
-    //     0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01,
-    // };
     const std::vector<double> default_ep_list{
-        0.15, 0.135, 0.12, 0.105, 0.09, 0.075, 0.06, 0.045,
+        0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01,
     };
+    // const std::vector<double> default_ep_list{
+    //     0.15, 0.135, 0.12, 0.105, 0.09, 0.075, 0.06, 0.045,
+    // };
 
     const auto arguments =
         helpers::parse_arguments(argc, argv, default_ep_list, default_max_frame_errors, default_max_decoded_words);
@@ -76,22 +76,22 @@ int main(int argc, char *argv[]) {
 
          				ensembleDecoder dude;
                 stabilizerCodes base(n, k, m, codeType, matrix_supplier, trained);
-                // stabilizerCodes five(n, k, m, codeType, matrix1, trained);
-                // stabilizerCodes six(n, k, m, codeType, matrix2, trained);
+                stabilizerCodes five(n, k, m, codeType, matrix1, trained);
+                stabilizerCodes six(n, k, m, codeType, matrix2, trained);
 
 
                 dude.add_decoder(base);
-                // dude.add_decoder(five);
-                // dude.add_decoder(six);
+                dude.add_decoder(five);
+                dude.add_decoder(six);
                 dude.setErrors(errorCreator.getErrorString(), errorCreator.getError());
-        				success = dude.decodeAllPaths(decIterNum, ep0);
+        				// success = dude.decodeAllPaths(decIterNum, ep0);
 
-								// for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
-								// 		success = dude.list_of_decoders[i]->decode(decIterNum, ep0);
-								// 		if (success[1]) {
-								// 			break;
-								// 		}
-								// }
+								for(int i = 0 ; i < dude.list_of_decoders.size(); i++){
+										success = dude.list_of_decoders[i]->decode(decIterNum, ep0);
+										if (success[1]) {
+											break;
+										}
+								}
         				
 #pragma omp critical
                 {
