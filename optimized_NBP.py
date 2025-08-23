@@ -691,6 +691,7 @@ class NBP_oc(nn.Module):
 
         print(type(self.weights_cn))
         print([type(p) for p in self.weights_cn])
+        print(f"Pruned {amount} percent of weights")
 
         self.save_weights()
 
@@ -928,14 +929,17 @@ def train(NBP_dec:NBP_oc, params):
         # training stage
         loss = torch.Tensor()
         print("Plotting loss...")
-        cpp_executable = './' + str(decoder.name)
         
         loss_pre_train = training_toric(NBP_dec, optimizer, ep1, sep,num_points, ep0, n_batches, NBP_dec.path, scheduler=scheduler)
         loss = torch.cat((loss, loss_pre_train), dim=0)
         plot_loss(loss, NBP_dec.path) #its ok if it doesn't converge to 0
         plot_loss(loss_pre_train, NBP_dec.path)
 
-        subprocess.call([cpp_executable])
+
+def get_binary(type: str, ep: str, decoder):
+    executable = './eval-exes/' + str(decoder.codeType) + '-' + str(decoder.n) + '-' + 'ens' + '-' + str(type) + '-' + str(ep) + '-' + '0001'
+
+    return executable
 
 def init_and_train(
     n: int,
@@ -1073,81 +1077,94 @@ def run_optimization():
     print("Best loss:", study.best_value)
 
 # Training parameter configurations
-training_configs = [
-    {
-        #best performance
-        'name': 'low_complexity_fast',
-        'params': {
-            'batch_size': 100,
-            'num_batch': 165,
-            'learning_rate': 0.2,
-            'num_points': 3,
-            'epsilon0': 0.57,
-            'epsilon1': 0.06
-        }
+training_configs = {
+    'low_complexity_fast': {
+        'batch_size': 100,
+        'num_batch': 165,
+        'learning_rate': 0.2,
+        'num_points': 3,
+        'epsilon0': 0.57,
+        'epsilon1': 0.06
     },
-    {
-        'name': 'medium_complexity_balanced',
-        'params': {
-            'batch_size': 140,
-            'num_batch': 200,
-            'learning_rate': 1,
-            'num_points': 6,
-            'epsilon0': 0.375,
-            'epsilon1': 0.06
-        }
+    'medium_complexity_balanced': {
+        'batch_size': 140,
+        'num_batch': 200,
+        'learning_rate': 1,
+        'num_points': 6,
+        'epsilon0': 0.375,
+        'epsilon1': 0.06
     },
-    {
-        'name': 'high_complexity_precise',
-        'params': {
-            'batch_size': 160,
-            'num_batch': 175,
-            'learning_rate': 0.9,
-            'num_points': 9,
-            'epsilon0': 0.57,
-            'epsilon1': 0.05
-        }
+    'high_complexity_precise': {
+        'batch_size': 160,
+        'num_batch': 175,
+        'learning_rate': 0.9,
+        'num_points': 9,
+        'epsilon0': 0.57,
+        'epsilon1': 0.05
     },
-    {
-        'name': 'quick_validation',
-        'params': {
-            'batch_size': 100,
-            'num_batch': 50,
-            'learning_rate': 1,
-            'num_points': 4,
-            'epsilon0': 0.4,
-            'epsilon1': 0.06
-        }
+    'paper': {
+        'batch_size': 120,
+        'num_batch': 200,
+        'learning_rate': 1,
+        'num_points': 6,
+        'epsilon0': 0.45,
+        'epsilon1': 0.06
     }
-]
+}
 
-# Train with all configurations
-decoder = init_and_train(
+base = init_and_train(
     n=128, k=2, m=384, 
     n_iterations=18, 
     error_weights=(4,7),
     codeType='toric',
-    params=training_configs['low_complexity_fast'],
-    name="optimized-baseline"
+    params=training_configs['paper'],
+    name="baseline-noopt"
 )
 
-decoder = init_and_train(
+one = init_and_train(
     n=128, k=2, m=384, 
     n_iterations=18, 
     error_weights=(5,6),
     codeType='toric',
     params=training_configs['low_complexity_fast'],
-    name="spec-five-weight"
+    name="hamming-one"
 )
 
-decoder = init_and_train(
+two = init_and_train(
     n=128, k=2, m=384, 
     n_iterations=18, 
     error_weights=(6,7),
     codeType='toric',
     params=training_configs['low_complexity_fast'],
-    name="spec-six-weight"
+    name="hamming-two"
 )
+
+print("Done training! Now pruning and retraining...")
+base.prune_weights(0.33)
+train(base)
+
+one.prune_weights(0.33)
+train(one)
+
+base.prune_weights(0.33)
+train(one)
+
+print("Now calling binaries for evaluation...")
+print("List error rate, ep = 0.4")
+cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
+subprocess.call([cpp_list])
+
+print("Guess error rate, ep = 0.4")
+cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
+subprocess.call([cpp_guess])
+
+print("List error rate, ep = 0.45")
+cpp_list = get_binary(type = 'list', ep = 'ep045', decoder = base )
+subprocess.call([cpp_list])
+
+print("Guess error rate, ep = 0.45")
+cpp_guess = get_binary(type = 'guess', ep = 'ep045', decoder = base )
+subprocess.call([cpp_guess])
 
 print("Training and pruning completed.\n")
 
