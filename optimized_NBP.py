@@ -821,7 +821,7 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
     idx = 0
     with tqdm(total=loss_length) as pbar:
         for i_batch in range(num_batch):
-            if decoder.specialize_counter%3 == 0 or decoder.name == "optimized-baseline":
+            if decoder.specialize_counter%3 == 0 or decoder.name == "baseline-noopt":
                 errorx = torch.tensor([])
                 errorz = torch.tensor([])
                 for i in range(num_points):
@@ -1139,15 +1139,19 @@ two = init_and_train(
     name="hamming-two"
 )
 
+print("baseline performance, ep = 0.4")
+cpp_base = get_binary(type = 'base', ep = 'ep04', decoder = base )
+subprocess.call([cpp_base])
+
 print("Done training! Now pruning and retraining...")
 base.prune_weights(0.33)
-train(base)
+train(base,training_configs['paper'])
 
 one.prune_weights(0.33)
-train(one)
+train(one, training_configs['low_complexity_fast'])
 
-base.prune_weights(0.33)
-train(one)
+two.prune_weights(0.33)
+train(two, training_configs['low_complexity_fast'])
 
 print("Now calling binaries for evaluation...")
 print("List error rate, ep = 0.4")
