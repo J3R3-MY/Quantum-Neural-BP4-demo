@@ -18,21 +18,21 @@
 #include <vector>
 
 int main(int argc, char *argv[]) {
-    unsigned n = 72;
+    unsigned n = 128;
     unsigned k = 2;
-    unsigned m = 216;
+    unsigned m = 384;
 
     int decIterNum = 25;
     bool trained = true;
     double ep0 = 0.4;
     stabilizerCodesType codeType = stabilizerCodesType::toric;
 
-    fileReader matrix_supplier(n, k, m, codeType, trained, "baseline-noopt");
-    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "baseline-noopt");
+    fileReader matrix_supplier(n, k, m, codeType, trained, "Tick");
+    fileReader matrix_supplier_dummy(n, k, m, codeType, trained, "Tick");
     matrix_supplier.check_symplectic();
 
-    fileReader matrix1(n, k, m, codeType, trained, "hamming-one");
-    fileReader matrix2(n, k, m, codeType, trained, "hamming-two");
+    fileReader matrix1(n, k, m, codeType, trained, "Trick");
+    fileReader matrix2(n, k, m, codeType, trained, "Track");
 
     constexpr int default_max_frame_errors = 300;
     constexpr int default_max_decoded_words = 45000000;
@@ -75,14 +75,14 @@ int main(int argc, char *argv[]) {
           			errorCreator.add_error_given_epsilon(epsilon);
 
          				ensembleDecoder dude;
-                stabilizerCodes base(n, k, m, codeType, matrix_supplier, trained);
-                stabilizerCodes five(n, k, m, codeType, matrix1, trained);
-                stabilizerCodes six(n, k, m, codeType, matrix2, trained);
+                stabilizerCodes tick(n, k, m, codeType, matrix_supplier, trained);
+                stabilizerCodes trick(n, k, m, codeType, matrix1, trained);
+                stabilizerCodes track(n, k, m, codeType, matrix2, trained);
 
 
-                dude.add_decoder(base);
-                dude.add_decoder(five);
-                dude.add_decoder(six);
+                dude.add_decoder(tick);
+                dude.add_decoder(trick);
+                dude.add_decoder(track);
                 dude.setErrors(errorCreator.getErrorString(), errorCreator.getError());
         				// success = dude.decodeAllPaths(decIterNum, ep0);
 

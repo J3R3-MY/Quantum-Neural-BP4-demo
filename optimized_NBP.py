@@ -1249,7 +1249,7 @@ two = init_and_train(
     name="hamming-two"
 )
 
-binaries = ["./eval-Tick", "./eval-Trick", "./eval-Track"]
+binaries = ["./eval-exes/eval-Tick", "./eval-exes/eval-Trick", "./eval-exes/eval-Track"]
 logs = ["forTick.txt", "forTrick.txt", "forTrack.txt"]
 
 for i, binary in enumerate(binaries):
@@ -1290,12 +1290,13 @@ for i, binary in enumerate(binaries):
 
 print("Now calling binaries for evaluation...")
 print("List error rate, ep = 0.4")
-cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
+# cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
+cpp_list = './eval-exes/eval-ens-boost-list'
 subprocess.call([cpp_list])
 
-print("Guess error rate, ep = 0.4")
-cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
-subprocess.call([cpp_guess])
+# print("Guess error rate, ep = 0.4")
+# cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
+# subprocess.call([cpp_guess])
 
 print("Training and pruning completed.\n")
 
