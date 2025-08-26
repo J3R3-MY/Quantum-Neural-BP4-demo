@@ -821,7 +821,8 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
     idx = 0
     with tqdm(total=loss_length) as pbar:
         for i_batch in range(num_batch):
-            if decoder.specialize_counter%3 == 0 or decoder.name == "baseline-noopt":
+            # if decoder.specialize_counter%3 == 0 or decoder.name == "baseline-noopt":
+            if check == True or decoder.name == "baseline-noopt":
                 errorx = torch.tensor([])
                 errorz = torch.tensor([])
                 for i in range(num_points):
@@ -892,10 +893,17 @@ def train(NBP_dec:NBP_oc, params):
     if(NBP_dec.codeType == 'GB'):
         optimizer = torch.optim.Adam(NBP_dec.parameters(), lr=lr)
     if(NBP_dec.codeType == 'toric'):
-        optimizer = torch.optim.SGD(
-            NBP_dec.parameters(),
-            lr=lr
-        )
+        if l2 == True and NBP_dec.name == "hamming-one" or all == True:
+            optimizer = torch.optim.SGD(
+                NBP_dec.parameters(),
+                lr=lr,
+                weight_decay=1e-4
+            )
+        else:
+            optimizer = torch.optim.SGD(
+                NBP_dec.parameters(),
+                lr=lr
+            )
         scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=params['learning_rate'], end_factor=0.1, total_iters=1200)
     print('--- Training Metadata ---')
     print(f'Code: n={NBP_dec.n}, k={NBP_dec.k}, PCM rows={NBP_dec.m1},{NBP_dec.m2}')
@@ -1112,6 +1120,12 @@ training_configs = {
     }
 }
 
+
+check = True
+l2 = False
+all = False
+print("Check if ensemble gets worse with the same parameters")
+
 base = init_and_train(
     n=128, k=2, m=384, 
     n_iterations=18, 
@@ -1121,6 +1135,70 @@ base = init_and_train(
     name="baseline-noopt"
 )
 
+one = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(5,6),
+    codeType='toric',
+    params=training_configs['paper'],
+    name="hamming-one"
+)
+
+two = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(6,7),
+    codeType='toric',
+    params=training_configs['paper'],
+    name="hamming-two"
+)
+
+print("Now calling binaries for evaluation...")
+print("List error rate, ep = 0.4")
+cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
+subprocess.call([cpp_list])
+
+print("Guess error rate, ep = 0.4")
+cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
+subprocess.call([cpp_guess])
+
+check = False
+l2 = True
+print("Check whether other sets of parameters and L2 regularization work as well")
+
+one = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(5,6),
+    codeType='toric',
+    params=training_configs['low_complexity_fast'],
+    name="hamming-one"
+)
+
+two = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(6,7),
+    codeType='toric',
+    params=training_configs['medium_complexity_balanced'],
+    name="hamming-two"
+)
+
+subprocess.call([cpp_list])
+subprocess.call([cpp_guess])
+
+
+all = True
+print("Check whether L2 regularization improves every decoder")
+
+base = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(4,7),
+    codeType='toric',
+    params=training_configs['paper'],
+    name="baseline-noopt"
+)
 one = init_and_train(
     n=128, k=2, m=384, 
     n_iterations=18, 
@@ -1139,36 +1217,33 @@ two = init_and_train(
     name="hamming-two"
 )
 
-print("baseline performance, ep = 0.4")
-cpp_base = get_binary(type = 'base', ep = 'ep04', decoder = base )
-subprocess.call([cpp_base])
-
-print("Done training! Now pruning and retraining...")
-base.prune_weights(0.33)
-train(base,training_configs['paper'])
-
-one.prune_weights(0.33)
-train(one, training_configs['low_complexity_fast'])
-
-two.prune_weights(0.33)
-train(two, training_configs['low_complexity_fast'])
-
-print("Now calling binaries for evaluation...")
-print("List error rate, ep = 0.4")
-cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
 subprocess.call([cpp_list])
-
-print("Guess error rate, ep = 0.4")
-cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
 subprocess.call([cpp_guess])
 
-print("List error rate, ep = 0.45")
-cpp_list = get_binary(type = 'list', ep = 'ep045', decoder = base )
-subprocess.call([cpp_list])
 
-print("Guess error rate, ep = 0.45")
-cpp_guess = get_binary(type = 'guess', ep = 'ep045', decoder = base )
-subprocess.call([cpp_guess])
+
+# print("baseline performance, ep = 0.4")
+# cpp_base = get_binary(type = 'base', ep = 'ep04', decoder = base )
+# subprocess.call([cpp_base])
+
+# print("Done training! Now pruning and retraining...")
+# base.prune_weights(0.33)
+# train(base,training_configs['paper'])
+#
+# one.prune_weights(0.33)
+# train(one, training_configs['low_complexity_fast'])
+#
+# two.prune_weights(0.33)
+# train(two, training_configs['low_complexity_fast'])
+
+# print("Now calling binaries for evaluation...")
+# print("List error rate, ep = 0.4")
+# cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
+# subprocess.call([cpp_list])
+#
+# print("Guess error rate, ep = 0.4")
+# cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
+# subprocess.call([cpp_guess])
 
 print("Training and pruning completed.\n")
 
