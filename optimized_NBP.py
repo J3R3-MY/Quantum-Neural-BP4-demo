@@ -41,6 +41,7 @@ class NBP_oc(nn.Module):
         self.path = "./training_results/" + self.codeType + "_" + str(self.n) + "_" + str(self.k) + "_" + str(self.m_oc) +"_" + str(self.name) + "/"
         self.specialize_counter = 0
         self.error_weights = error_weights
+        self.current_line = 0
         #If True, then all outgoing edges on the same CN has the same weight, configurable
         if self.name == 'NoWS':
             self.one_weight_per_cn = False
@@ -828,6 +829,8 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
                     ex, ez = addDeploarizationErrorGiveEp(decoder.n, ep1 + i * sep, decoder.batch_size // num_points)
                     errorx = torch.cat((errorx, ex), dim=0)
                     errorz = torch.cat((errorz, ez), dim=0)
+            elif boosting == True:
+                errorx, errorz = BoostingTraining(decoder, errorx, errorz, decoder.batch_size)
             else:
                 # Try and add errors with a certain weight
                 errorx = torch.tensor([])
@@ -859,6 +862,81 @@ def training_toric(decoder: NBP_oc, optimizer, ep1, sep,num_points, ep0, num_bat
     decoder.specialize_counter += 1
     print('Training completed.\n')
     return loss_min
+
+
+def load_tokenized_error_lines(txt_path: str):
+    """
+    Loads lines from a txt file, removes any trailing float, splits into tokens.
+    Returns a list of lists of tokens.
+    """
+    lines_tokenized = []
+    with open(txt_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            # Remove trailing float if present
+            try:
+                float(parts[-1])
+                if len(parts) > 1:
+                    parts = parts[:-1]
+            except Exception:
+                pass
+            lines_tokenized.append(parts)
+    return lines_tokenized
+
+def addErrorfromEnsemble(n: int, lines_tokenized: list, batch_size: int = 1, start_line: int = 0):
+    """
+    lines_tokenized: list of lists, each inner list contains tokens for a line (e.g. ['X5', 'Y7', 'Z11'])
+    Returns (errorx, errorz, next_line).
+    """
+    errorx = torch.zeros((batch_size, n))
+    errorz = torch.zeros((batch_size, n))
+    end_line = min(start_line + batch_size, len(lines_tokenized))
+    for b, idx in enumerate(range(start_line, end_line)):
+        tokens = lines_tokenized[idx]
+        for token in tokens:
+            if token and token[0] in 'XYZxyz':
+                try:
+                    pos = int(token[1:])
+                except Exception:
+                    continue
+                if 0 <= pos < n:
+                    if token[0] in 'Xx':
+                        errorx[b, pos] = 1
+                    if token[0] in 'Zz':
+                        errorz[b, pos] = 1
+                    if token[0] in 'Yy':
+                        errorx[b, pos] = 1
+                        errorz[b, pos] = 1
+    return errorx, errorz, end_line
+
+def BoostingTraining(decoder: NBP_oc, errorx, errorz, subsize):
+    """
+    Creates errors from .txt file to enable model to learn from the mistakes of its predecessors
+    """
+    if(decoder.name == "Tick"):
+        print("Training on others mistakes...")
+        patterns = load_tokenized_error_lines('forTick.txt')
+        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
+
+
+    if(decoder.name == "Trick"):
+        print("Training on others mistakes...")
+        patterns = load_tokenized_error_lines('forTrick.txt')
+        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
+
+    if(decoder.name == "Track"):
+        print("Training on others mistakes...")
+        patterns = load_tokenized_error_lines('forTrack.txt')
+        ex, ez, decoder.current_line = addErrorfromEnsemble(decoder.n, patterns, subsize, decoder.current_line)
+
+
+    errorx = torch.cat((errorx, ex), dim=0)
+    errorz = torch.cat((errorz, ez), dim=0)
+
+    return errorx, errorz
 
 def train(NBP_dec:NBP_oc, params):
 
@@ -1112,6 +1190,8 @@ training_configs = {
     }
 }
 
+boosting = False
+
 base = init_and_train(
     n=128, k=2, m=384, 
     n_iterations=18, 
@@ -1139,19 +1219,74 @@ two = init_and_train(
     name="hamming-two"
 )
 
-print("baseline performance, ep = 0.4")
-cpp_base = get_binary(type = 'base', ep = 'ep04', decoder = base )
-subprocess.call([cpp_base])
+boosting = True
 
-print("Done training! Now pruning and retraining...")
-base.prune_weights(0.33)
-train(base,training_configs['paper'])
 
-one.prune_weights(0.33)
-train(one, training_configs['low_complexity_fast'])
+base = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(4,7),
+    codeType='toric',
+    params=training_configs['paper'],
+    name="baseline-noopt"
+)
 
-two.prune_weights(0.33)
-train(two, training_configs['low_complexity_fast'])
+one = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(5,6),
+    codeType='toric',
+    params=training_configs['low_complexity_fast'],
+    name="hamming-one"
+)
+
+two = init_and_train(
+    n=128, k=2, m=384, 
+    n_iterations=18, 
+    error_weights=(6,7),
+    codeType='toric',
+    params=training_configs['low_complexity_fast'],
+    name="hamming-two"
+)
+
+binaries = ["./eval-Tick", "./eval-Trick", "./eval-Track"]
+logs = ["forTick.txt", "forTrick.txt", "forTrack.txt"]
+
+for i, binary in enumerate(binaries):
+    # The two log files that are NOT associated with this binary
+    target_logs = [log for j, log in enumerate(logs) if j != i]
+
+    # Open the two files for appending
+    with open(target_logs[0], "a") as f1, open(target_logs[1], "a") as f2:
+        process = subprocess.Popen(
+            [binary],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        # Stream output into both files
+        for line in process.stdout:
+            f1.write(line)
+            f2.write(line)
+            f1.flush()
+            f2.flush()
+
+        process.wait()
+
+# print("baseline performance, ep = 0.4")
+# cpp_base = get_binary(type = 'base', ep = 'ep04', decoder = base )
+# subprocess.call([cpp_base])
+#
+# print("Done training! Now pruning and retraining...")
+# base.prune_weights(0.33)
+# train(base,training_configs['paper'])
+#
+# one.prune_weights(0.33)
+# train(one, training_configs['low_complexity_fast'])
+#
+# two.prune_weights(0.33)
+# train(two, training_configs['low_complexity_fast'])
 
 print("Now calling binaries for evaluation...")
 print("List error rate, ep = 0.4")
