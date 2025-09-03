@@ -1114,6 +1114,14 @@ training_configs = {
 
 base = init_and_train(
     n=128, k=2, m=384, 
+    # n=200, k=2, m=600, 
+    # n=72, k=2, m=216, 
+    # n=32, k=2, m=96, 
+    #GB
+    # n=254, k=28, m=254, 
+    # n=126, k=28, m=126, 
+    # n=48, k=6, m=2000, 
+    # n=46, k=2, m=800, 
     n_iterations=18, 
     error_weights=(4,7),
     codeType='toric',
@@ -1123,6 +1131,14 @@ base = init_and_train(
 
 one = init_and_train(
     n=128, k=2, m=384, 
+    # n=200, k=2, m=600, 
+    # n=72, k=2, m=216, 
+    # n=32, k=2, m=96, 
+    #GB
+    # n=254, k=28, m=254, 
+    # n=126, k=28, m=126, 
+    # n=48, k=6, m=2000, 
+    # n=46, k=2, m=800, 
     n_iterations=18, 
     error_weights=(5,6),
     codeType='toric',
@@ -1132,6 +1148,14 @@ one = init_and_train(
 
 two = init_and_train(
     n=128, k=2, m=384, 
+    # n=200, k=2, m=600, 
+    # n=72, k=2, m=216, 
+    # n=32, k=2, m=96, 
+    #GB
+    # n=254, k=28, m=254, 
+    # n=126, k=28, m=126, 
+    # n=48, k=6, m=2000, 
+    # n=46, k=2, m=800, 
     n_iterations=18, 
     error_weights=(6,7),
     codeType='toric',
@@ -1143,6 +1167,10 @@ print("baseline performance, ep = 0.4")
 cpp_base = get_binary(type = 'base', ep = 'ep04', decoder = base )
 subprocess.call([cpp_base])
 
+print("unpruned ensemble, ep = 0.4")
+cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
+subprocess.call([cpp_guess])
+
 print("Done training! Now pruning and retraining...")
 base.prune_weights(0.33)
 train(base,training_configs['paper'])
@@ -1153,13 +1181,12 @@ train(one, training_configs['low_complexity_fast'])
 two.prune_weights(0.33)
 train(two, training_configs['low_complexity_fast'])
 
-print("Now calling binaries for evaluation...")
-print("List error rate, ep = 0.4")
-cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
-subprocess.call([cpp_list])
 
-print("Guess error rate, ep = 0.4")
-cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
+print("Pruned baseline")
+subprocess.call([cpp_base])
+
+print("Now calling binaries for evaluation...")
+print("Guess error rate, pruned, ep = 0.4")
 subprocess.call([cpp_guess])
 
 print("Training and pruning completed.\n")
