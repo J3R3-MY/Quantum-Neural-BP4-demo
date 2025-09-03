@@ -46,10 +46,12 @@ std::vector<bool> ensembleDecoder::decodeAllPaths(unsigned int L, double epsilon
 			bestSuccess = success;
 		}
 		// This may be wrong, since we are kind of decoding every instance anyway
-			if(updateGuess(list_of_decoders[i]->getErrorHat(), i)){
-				bestSuccess = success;
-		}
-	}
+    if (success[0]) {
+        if (updateGuess(list_of_decoders[i]->getErrorHat(), i)) {
+            bestSuccess = success;
+        }
+    }
+}
 
 	
 		//Best-Case, any of the decoders is right
