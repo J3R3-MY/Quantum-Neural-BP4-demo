@@ -1177,6 +1177,7 @@ base, one, two = create_models()
 # subprocess.call([cpp_guess])
 
 cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
+# cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
 print("Done training! Now pruning and retraining...")
 def find_pruning_amount(percent, runs):
     for _ in range(runs):
@@ -1190,14 +1191,22 @@ def find_pruning_amount(percent, runs):
         train(two, training_configs['low_complexity_fast'])
 
         subprocess.call([cpp_guess])
+        # if _ == runs:
+        #     subprocess.call([cpp_list])
 
+# These all sum up to roughly 45% pruned weights from the beginning, which vastly deacreased performance when tried with 33% per run
+# If none of these performs better, it is unlikely (but not impossible) that we cannot throw out more than 45%
+print("33 percent, two runs")
 find_pruning_amount(0.33, 2)
 base, one, two = create_models()
+print("20 percent, four runs")
+find_pruning_amount(0.20, 4)
+base, one, two = create_models()
+print("40 percent, two runs")
 find_pruning_amount(0.40, 2)
 base, one, two = create_models()
-find_pruning_amount(0.25, 3)
-base, one, two = create_models()
-find_pruning_amount(0.50, 2)
+print("10 percent, seven runs")
+find_pruning_amount(0.10, 7)
 
 # print("Pruned baseline")
 # subprocess.call([cpp_base])
