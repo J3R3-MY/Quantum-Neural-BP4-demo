@@ -1171,6 +1171,9 @@ print("unpruned ensemble, ep = 0.4")
 cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
 subprocess.call([cpp_guess])
 
+cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
+subprocess.call([cpp_list])
+
 print("Done training! Now pruning and retraining...")
 base.prune_weights(0.33)
 train(base,training_configs['paper'])
