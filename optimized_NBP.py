@@ -1119,7 +1119,7 @@ base = init_and_train(
     # n=48, k=6, m=2000, 
     # n=46, k=2, m=800, 
     n_iterations=6, 
-    error_weights=(4,7),
+    error_weights=(2,3),
     codeType='GB',
     params=training_configs['paper'],
     name="baseline-noopt"
@@ -1132,7 +1132,7 @@ one = init_and_train(
     # n=48, k=6, m=2000, 
     # n=46, k=2, m=800, 
     n_iterations=6, 
-    error_weights=(5,6),
+    error_weights=(3,4),
     codeType='GB',
     params=training_configs['low_complexity_fast'],
     name="hamming-one"
@@ -1145,7 +1145,7 @@ two = init_and_train(
     # n=48, k=6, m=2000, 
     # n=46, k=2, m=800, 
     n_iterations=6, 
-    error_weights=(6,7),
+    error_weights=(4,5),
     codeType='GB',
     params=training_configs['low_complexity_fast'],
     name="hamming-two"
