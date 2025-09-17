@@ -1151,34 +1151,34 @@ two = init_and_train(
     name="hamming-two"
 )
 
-print("baseline performance, ep = 0.4")
-cpp_base = get_binary(type = 'base', ep = 'ep04', decoder = base )
-subprocess.call([cpp_base])
+# print("baseline performance, ep = 0.4")
+# cpp_base = get_binary(type = 'base', ep = 'ep04', decoder = base )
+# subprocess.call([cpp_base])
 
-print("unpruned ensemble guess, ep = 0.4")
-cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
-subprocess.call([cpp_guess])
+# print("unpruned ensemble guess, ep = 0.4")
+# cpp_guess = get_binary(type = 'guess', ep = 'ep04', decoder = base )
+# subprocess.call([cpp_guess])
 
 print("unpruned ensemble list, ep = 0.4")
 cpp_list = get_binary(type = 'list', ep = 'ep04', decoder = base )
 subprocess.call([cpp_list])
 
-print("Done training! Now pruning and retraining...")
-base.prune_weights(0.33)
-train(base,training_configs['paper'])
-
-one.prune_weights(0.33)
-train(one, training_configs['low_complexity_fast'])
-
-two.prune_weights(0.33)
-train(two, training_configs['low_complexity_fast'])
-
-print("Now calling binaries for evaluation...")
-print("Guess error rate, pruned, ep = 0.4")
-subprocess.call([cpp_guess])
-
-print("List error rate, pruned, ep = 0.4")
-subprocess.call([cpp_list])
+# print("Done training! Now pruning and retraining...")
+# base.prune_weights(0.33)
+# train(base,training_configs['paper'])
+#
+# one.prune_weights(0.33)
+# train(one, training_configs['low_complexity_fast'])
+#
+# two.prune_weights(0.33)
+# train(two, training_configs['low_complexity_fast'])
+#
+# print("Now calling binaries for evaluation...")
+# print("Guess error rate, pruned, ep = 0.4")
+# subprocess.call([cpp_guess])
+#
+# print("List error rate, pruned, ep = 0.4")
+# subprocess.call([cpp_list])
 
 print("Training and pruning completed.\n")
 
